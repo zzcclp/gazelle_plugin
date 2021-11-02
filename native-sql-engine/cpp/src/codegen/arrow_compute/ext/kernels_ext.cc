@@ -316,7 +316,7 @@ arrow::Status ConcatArrayKernel::Evaluate(const ArrayList& in,
   return impl_->Evaluate(in, out);
 }
 
-///////////////  ConcatArray  ////////////////
+///////////////  CachedRelationKernel  ////////////////
 class CachedRelationKernel::Impl {
  public:
   Impl(arrow::compute::ExecContext* ctx, std::shared_ptr<arrow::Schema> result_schema,
@@ -468,6 +468,83 @@ arrow::Status CachedRelationKernel::MakeResultIterator(
 }
 
 std::string CachedRelationKernel::GetSignature() { return ""; }
+
+///////////////  LazyReadKernel  ////////////////
+class LazyReadKernel::Impl {
+ public:
+  Impl(arrow::compute::ExecContext* ctx) : ctx_(ctx) {}
+
+  arrow::Status Evaluate(arrow::RecordBatchIterator rb_iter) {
+    rb_iter_ = std::move(rb_iter);
+    return arrow::Status::OK();
+  }
+
+  arrow::Status MakeResultIterator(
+      std::shared_ptr<arrow::Schema> schema,
+      std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) {
+    *out = std::make_shared<LazyReadResultIterator>(ctx_, std::move(rb_iter_));
+    return arrow::Status::OK();
+  }
+
+ private:
+  arrow::compute::ExecContext* ctx_;
+  arrow::RecordBatchIterator rb_iter_;
+
+  class LazyReadResultIterator : public ResultIterator<arrow::RecordBatch> {
+   public:
+    LazyReadResultIterator(arrow::compute::ExecContext* ctx,
+                           arrow::RecordBatchIterator rb_iter)
+        : ctx_(ctx), rb_iter_(std::move(rb_iter)) {}
+
+    std::string ToString() override { return "LazyReadResultIterator"; }
+
+    bool HasNext() override {
+      while (num_rows_ == 0) {
+        next_batch_ = rb_iter_.Next().ValueOrDie();
+        if (next_batch_ == nullptr) {
+          return false;
+        }
+        num_rows_ += next_batch_->num_rows();
+      }
+      return true;
+    }
+
+    arrow::Status Next(std::shared_ptr<arrow::RecordBatch>* out) override {
+      *out = next_batch_;
+      num_rows_ = 0;
+      return arrow::Status::OK();
+    }
+
+   private:
+    arrow::compute::ExecContext* ctx_;
+    arrow::RecordBatchIterator rb_iter_;
+    std::shared_ptr<arrow::RecordBatch> next_batch_;
+    int64_t num_rows_ = 0;
+  };
+};
+
+arrow::Status LazyReadKernel::Make(arrow::compute::ExecContext* ctx,
+                                   std::shared_ptr<KernalBase>* out) {
+  *out = std::make_shared<LazyReadKernel>(ctx);
+  return arrow::Status::OK();
+}
+
+LazyReadKernel::LazyReadKernel(arrow::compute::ExecContext* ctx) {
+  impl_.reset(new Impl(ctx));
+  kernel_name_ = "LazyReadKernel";
+}
+
+arrow::Status LazyReadKernel::Evaluate(arrow::RecordBatchIterator rb_iter) {
+  return impl_->Evaluate(std::move(rb_iter));
+}
+
+arrow::Status LazyReadKernel::MakeResultIterator(
+    std::shared_ptr<arrow::Schema> schema,
+    std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) {
+  return impl_->MakeResultIterator(schema, out);
+}
+
+std::string LazyReadKernel::GetSignature() { return ""; }
 
 ///////////////  ConcatArrayList  ////////////////
 class ConcatArrayListKernel::Impl {

@@ -69,7 +69,7 @@ case class ColumnarHashAggregateExec(
     var resultExpressions: Seq[NamedExpression],
     child: SparkPlan)
     extends BaseAggregateExec
-    with ColumnarCodegenSupport
+    with ColumnarTransformSupport
     with AliasAwareOutputPartitioning {
 
   val sparkConf = sparkContext.getConf
@@ -618,23 +618,23 @@ case class ColumnarHashAggregateExec(
     }
   }
 
-  /** ColumnarCodegenSupport **/
+  /** ColumnarTransformSupport **/
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       c.inputRDDs
     case _ =>
       Seq(child.executeColumnar())
   }
 
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = child match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       c.getBuildPlans
     case _ =>
       Seq()
   }
 
   override def getStreamedLeafPlan: SparkPlan = child match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       c.getStreamedLeafPlan
     case _ =>
       this
@@ -649,7 +649,7 @@ case class ColumnarHashAggregateExec(
 
   override def getChild: SparkPlan = child
 
-  override def supportColumnarCodegen: Boolean = true
+  override def supportColumnarTransform: Boolean = true
 
   // override def canEqual(that: Any): Boolean = false
 
@@ -664,11 +664,10 @@ case class ColumnarHashAggregateExec(
       sparkConf)
   }
 
-  override def doCodeGen: ColumnarCodegenContext = {
-
+  override def doTransform: ColumnarTransformContext = {
     val childCtx = child match {
-      case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
-        c.doCodeGen
+      case c: ColumnarTransformSupport if c.supportColumnarTransform =>
+        c.doTransform
       case _ =>
         null
     }
@@ -688,7 +687,7 @@ case class ColumnarHashAggregateExec(
         ConverterUtils.toArrowSchema(child.output))
     }
     val outputSchema = ConverterUtils.toArrowSchema(output)
-    ColumnarCodegenContext(inputSchema, outputSchema, codeGenNode)
+    ColumnarTransformContext(inputSchema, outputSchema, codeGenNode)
   }
 
   /****************************/

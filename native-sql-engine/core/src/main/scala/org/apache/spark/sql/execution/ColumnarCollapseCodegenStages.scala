@@ -119,8 +119,8 @@ case class ColumnarCollapseCodegenStages(
     extends Rule[SparkPlan] {
 
   private def supportCodegen(plan: SparkPlan): Boolean = plan match {
-    case plan: ColumnarCodegenSupport =>
-      plan.supportColumnarCodegen
+    case plan: ColumnarTransformSupport =>
+      plan.supportColumnarTransform
     case _ => false
   }
 
@@ -155,7 +155,7 @@ case class ColumnarCollapseCodegenStages(
     case p: ColumnarConditionProjectExec
         if (containsSubquery(p.condition) || containsSubquery(p.projectList)) =>
       false
-    case p: ColumnarCodegenSupport if p.supportColumnarCodegen =>
+    case p: ColumnarTransformSupport if p.supportColumnarTransform =>
       plan.children.map(existsJoins(_, count)).exists(_ == true)
     case _ =>
       false
@@ -220,10 +220,10 @@ case class ColumnarCollapseCodegenStages(
   private def insertInputAdapter(plan: SparkPlan): SparkPlan = {
     plan match {
       case p if !supportCodegen(p) =>
-        new ColumnarInputAdapter(insertWholeStageCodegen(p))
+        new ColumnarInputAdapter(insertWholeStageTransformer(p))
       case p: ColumnarConditionProjectExec
           if (containsSubquery(p.condition) || containsSubquery(p.projectList)) =>
-        new ColumnarInputAdapter(p.withNewChildren(p.children.map(insertWholeStageCodegen)))
+        new ColumnarInputAdapter(p.withNewChildren(p.children.map(insertWholeStageTransformer)))
       case j: ColumnarSortMergeJoinExec
           if j.buildPlan.isInstanceOf[ColumnarSortMergeJoinExec] || (j.buildPlan
             .isInstanceOf[ColumnarConditionProjectExec] && j.buildPlan
@@ -232,16 +232,16 @@ case class ColumnarCollapseCodegenStages(
         // we don't support any ColumnarSortMergeJoin whose both children are ColumnarSortMergeJoin
         j.withNewChildren(j.children.map(c => {
           if (c.equals(j.buildPlan)) {
-            new ColumnarInputAdapter(insertWholeStageCodegen(c))
+            new ColumnarInputAdapter(insertWholeStageTransformer(c))
           } else {
             insertInputAdapter(c)
           }
         }))
       case j: ColumnarHashAggregateExec =>
-        new ColumnarInputAdapter(insertWholeStageCodegen(j))
+        new ColumnarInputAdapter(insertWholeStageTransformer(j))
       case j: ColumnarSortExec =>
         j.withNewChildren(
-          j.children.map(child => new ColumnarInputAdapter(insertWholeStageCodegen(child))))
+          j.children.map(child => new ColumnarInputAdapter(insertWholeStageTransformer(child))))
       case p =>
         p match {
           case exec: ColumnarConditionProjectExec =>
@@ -249,7 +249,7 @@ case class ColumnarCollapseCodegenStages(
             if (after_opt.isInstanceOf[ColumnarConditionProjectExec]) {
               after_opt.withNewChildren(after_opt.children.map(c => {
                 if (c.isInstanceOf[ColumnarSortExec]) {
-                  new ColumnarInputAdapter(insertWholeStageCodegen(c))
+                  new ColumnarInputAdapter(insertWholeStageTransformer(c))
                 } else {
                   insertInputAdapter(c)
                 }
@@ -268,40 +268,77 @@ case class ColumnarCollapseCodegenStages(
   /**
    * Inserts a WholeStageCodegen on top of those that support codegen.
    */
-  private def insertWholeStageCodegen(plan: SparkPlan): SparkPlan = {
+//  private def insertWholeStageCodegen(plan: SparkPlan): SparkPlan = {
+//    plan match {
+//      // For operators that will output domain object, do not insert WholeStageCodegen for it as
+//      // domain object can not be written into unsafe row.
+//      case plan
+//          if plan.output.length == 1 && plan.output.head.dataType.isInstanceOf[ObjectType] =>
+//        plan.withNewChildren(plan.children.map(insertWholeStageCodegen))
+//      case j: ColumnarHashAggregateExec =>
+//        if (!j.child.isInstanceOf[ColumnarHashAggregateExec] && existsJoins(j)) {
+//          ColumnarWholeStageCodegenExec(j.withNewChildren(j.children.map(insertInputAdapter)))(
+//            codegenStageCounter.incrementAndGet())
+//        } else {
+//          j.withNewChildren(j.children.map(insertWholeStageCodegen))
+//        }
+//      case s: ColumnarSortExec =>
+//        /*If ColumnarSort is not ahead of ColumnarSMJ, we should not do wscg for it*/
+//        s.withNewChildren(s.children.map(insertWholeStageCodegen))
+//      case plan: ColumnarTransformSupport if supportCodegen(plan) && existsJoins(plan) =>
+//        ColumnarWholeStageCodegenExec(insertInputAdapter(plan))(
+//          codegenStageCounter.incrementAndGet())
+//      case other =>
+//        if (other.isInstanceOf[ColumnarConditionProjectExec]) {
+//          val after_opt =
+//            joinOptimization(other.asInstanceOf[ColumnarConditionProjectExec], skip_smj = true)
+//          after_opt.withNewChildren(after_opt.children.map(insertWholeStageCodegen))
+//        } else {
+//          other.withNewChildren(other.children.map(insertWholeStageCodegen))
+//        }
+//    }
+//  }
+
+  /**
+   * Inserts a WholeStageTransformer on top of those that support columnar transform.
+   */
+//  private def insertWholeStageTransformer(plan: SparkPlan): SparkPlan = {
+//    plan match {
+//      case j: ColumnarHashAggregateExec =>
+//        if (j.child.isInstanceOf[ColumnarShuffledHashJoinExec]) {
+//          ColumnarWholeStageTransformerExec(
+//            j.withNewChildren(j.children.map(insertInputAdapter)))(
+//            codegenStageCounter.incrementAndGet())
+//        } else {
+//          j.withNewChildren(j.children.map(insertWholeStageTransformer))
+//        }
+//      case other =>
+//        other.withNewChildren(other.children.map(insertWholeStageTransformer))
+//    }
+//  }
+
+  private def insertWholeStageTransformer(plan: SparkPlan): SparkPlan = {
     plan match {
-      // For operators that will output domain object, do not insert WholeStageCodegen for it as
-      // domain object can not be written into unsafe row.
-      case plan
-          if plan.output.length == 1 && plan.output.head.dataType.isInstanceOf[ObjectType] =>
-        plan.withNewChildren(plan.children.map(insertWholeStageCodegen))
-      case j: ColumnarHashAggregateExec =>
-        if (!j.child.isInstanceOf[ColumnarHashAggregateExec] && existsJoins(j)) {
-          ColumnarWholeStageCodegenExec(j.withNewChildren(j.children.map(insertInputAdapter)))(
+      case a: ColumnarHashAggregateExec =>
+        if (a.child.isInstanceOf[ColumnarConditionProjectExec]) {
+          ColumnarWholeStageTransformerExec(
+            a.withNewChildren(a.children.map(insertInputAdapter)))(
             codegenStageCounter.incrementAndGet())
         } else {
-          j.withNewChildren(j.children.map(insertWholeStageCodegen))
+          a.withNewChildren(a.children.map(insertWholeStageTransformer))
         }
-      case s: ColumnarSortExec =>
-        /*If ColumnarSort is not ahead of ColumnarSMJ, we should not do wscg for it*/
-        s.withNewChildren(s.children.map(insertWholeStageCodegen))
-      case plan: ColumnarCodegenSupport if supportCodegen(plan) && existsJoins(plan) =>
-        ColumnarWholeStageCodegenExec(insertInputAdapter(plan))(
-          codegenStageCounter.incrementAndGet())
+//      case c: ColumnarConditionProjectExec =>
+//        ColumnarWholeStageTransformerExec(
+//          c.withNewChildren(c.children.map(insertInputAdapter)))(
+//          codegenStageCounter.incrementAndGet())
       case other =>
-        if (other.isInstanceOf[ColumnarConditionProjectExec]) {
-          val after_opt =
-            joinOptimization(other.asInstanceOf[ColumnarConditionProjectExec], skip_smj = true)
-          after_opt.withNewChildren(after_opt.children.map(insertWholeStageCodegen))
-        } else {
-          other.withNewChildren(other.children.map(insertWholeStageCodegen))
-        }
+        other.withNewChildren(other.children.map(insertWholeStageTransformer))
     }
   }
 
   def apply(plan: SparkPlan): SparkPlan = {
     if (columnarWholeStageEnabled) {
-      insertWholeStageCodegen(plan)
+      insertWholeStageTransformer(plan)
     } else {
       plan
     }

@@ -133,6 +133,26 @@ public class ExpressionEvaluator implements AutoCloseable {
     return jniWrapper.nativeGetSignature(nativeHandler);
   }
 
+  /** Used by WholeStageTransfrom */
+  public BatchIterator createKernelWithIterator(
+          Schema ws_in_schema, List<ExpressionTree> ws_exprs,
+          Schema ws_res_schema,
+          List<ExpressionTree> in_exprs, ColumnarNativeIterator batchItr,
+          BatchIterator[] dependencies, boolean finishReturn)
+          throws RuntimeException, IOException, GandivaException {
+    NativeMemoryPool memoryPool = SparkMemoryUtils.contextMemoryPool();
+    long[] instanceIdList = new long[dependencies.length];
+    for (int i = 0; i < dependencies.length; i++) {
+      instanceIdList[i] = dependencies[i].getInstanceId();
+    }
+    long batchIteratorInstance = jniWrapper.nativeCreateKernelWithIterator(
+            memoryPool.getNativeInstanceId(), getSchemaBytesBuf(ws_in_schema),
+            getExprListBytesBuf(ws_exprs), getSchemaBytesBuf(ws_res_schema),
+            getExprListBytesBuf(in_exprs),
+            batchItr, instanceIdList, finishReturn);
+    return new BatchIterator(batchIteratorInstance);
+  }
+
   /** Set result Schema in some special cases */
   public void setReturnFields(Schema schema) throws RuntimeException, IOException, GandivaException {
     jniWrapper.nativeSetReturnFields(nativeHandler, getSchemaBytesBuf(schema));

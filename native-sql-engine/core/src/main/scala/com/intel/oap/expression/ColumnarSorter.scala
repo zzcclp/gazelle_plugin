@@ -231,7 +231,7 @@ object ColumnarSorter extends Logging {
       new ArrowType.Int(32, true))
   }
 
-  def prepareKernelFunction(
+  def getKernelFunction(
       sortOrder: Seq[SortOrder],
       outputAttributes: Seq[Attribute],
       sparkConf: SparkConf,
@@ -326,7 +326,7 @@ object ColumnarSorter extends Logging {
       new ArrowType.Int(32, true) /*dummy ret type, won't be used*/ )
 
     val sortFuncName = "sortArraysToIndices"
-    val sort_func_node = TreeBuilder.makeFunction(
+    TreeBuilder.makeFunction(
       sortFuncName,
       Lists
         .newArrayList(
@@ -338,7 +338,14 @@ object ColumnarSorter extends Logging {
           codegen_node,
           result_type_node),
       new ArrowType.Int(32, true) /*dummy ret type, won't be used*/ )
+  }
 
+  def prepareKernelFunction(
+       sortOrder: Seq[SortOrder],
+       outputAttributes: Seq[Attribute],
+       sparkConf: SparkConf,
+       result_type: Int = 0): TreeNode = {
+    val sort_func_node = getKernelFunction(sortOrder, outputAttributes, sparkConf, result_type)
     TreeBuilder.makeFunction(
       "standalone",
       Lists.newArrayList(sort_func_node),

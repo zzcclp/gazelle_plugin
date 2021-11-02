@@ -43,7 +43,7 @@ case class ColumnarConditionProjectExec(
     projectList: Seq[NamedExpression],
     child: SparkPlan)
     extends UnaryExecNode
-    with ColumnarCodegenSupport
+    with ColumnarTransformSupport
     with PredicateHelper
     with AliasAwareOutputPartitioning
     with Logging {
@@ -134,21 +134,21 @@ case class ColumnarConditionProjectExec(
     }
 
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       c.inputRDDs
     case _ =>
       Seq(child.executeColumnar())
   }
 
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = child match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       c.getBuildPlans
     case _ =>
       Seq()
   }
 
   override def getStreamedLeafPlan: SparkPlan = child match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       c.getStreamedLeafPlan
     case _ =>
       this
@@ -163,7 +163,7 @@ case class ColumnarConditionProjectExec(
 
   override def getChild: SparkPlan = child
 
-  override def supportColumnarCodegen: Boolean = true
+  override def supportColumnarTransform: Boolean = true
 
   // override def canEqual(that: Any): Boolean = false
 
@@ -215,21 +215,80 @@ case class ColumnarConditionProjectExec(
     }
   }
 
-  override def doCodeGen: ColumnarCodegenContext = {
+  def getCondProjectKernelFunction(childTreeNode: TreeNode): TreeNode = {
+    val (filterNode, projectNode) =
+      ColumnarConditionProjector.prepareKernelFunction(condition, projectList, child.output)
+    if (filterNode != null && projectNode != null) {
+      val condProjectNode = TreeBuilder.makeFunction(
+          s"CondProject",
+          Lists.newArrayList(projectNode, filterNode),
+          new ArrowType.Int(32, true))
+      if (childTreeNode != null) {
+        TreeBuilder.makeFunction(
+          s"child",
+          Lists.newArrayList(condProjectNode, childTreeNode),
+          new ArrowType.Int(32, true))
+      } else {
+        TreeBuilder.makeFunction(
+          s"child",
+          Lists.newArrayList(condProjectNode),
+          new ArrowType.Int(32, true))
+      }
+    } else if (filterNode != null) {
+      val condProjectNode = TreeBuilder.makeFunction(
+        s"CondProject",
+        Lists.newArrayList(filterNode),
+        new ArrowType.Int(32, true))
+      if (childTreeNode != null) {
+        TreeBuilder.makeFunction(
+          s"child",
+          Lists.newArrayList(condProjectNode, childTreeNode),
+          new ArrowType.Int(32, true))
+      } else {
+        TreeBuilder.makeFunction(
+          s"child",
+          Lists.newArrayList(condProjectNode),
+          new ArrowType.Int(32, true))
+      }
+    } else if (projectNode != null) {
+      val condProjectNode = TreeBuilder.makeFunction(
+        s"CondProject",
+        Lists.newArrayList(projectNode),
+        new ArrowType.Int(32, true))
+      if (childTreeNode != null) {
+        TreeBuilder.makeFunction(
+          s"child",
+          Lists.newArrayList(condProjectNode, childTreeNode),
+          new ArrowType.Int(32, true))
+      } else {
+        TreeBuilder.makeFunction(
+          s"child",
+          Lists.newArrayList(condProjectNode),
+          new ArrowType.Int(32, true))
+      }
+    } else {
+      null
+    }
+  }
+
+  override def doTransform: ColumnarTransformContext = {
     val (childCtx, kernelFunction) = child match {
-      case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
-        val ctx = c.doCodeGen
-        (ctx, getKernelFunction(ctx.root))
+      case c: ColumnarTransformSupport if c.supportColumnarTransform =>
+        val ctx = c.doTransform
+        (ctx, getCondProjectKernelFunction(ctx.root))
       case _ =>
-        (null, getKernelFunction(null))
+        (null, getCondProjectKernelFunction(null))
     }
     if (kernelFunction == null) {
       return childCtx
     }
-    val inputSchema = if (childCtx != null) { childCtx.inputSchema }
-    else { ConverterUtils.toArrowSchema(child.output) }
+    val inputSchema = if (childCtx != null) {
+      childCtx.inputSchema
+    } else {
+      ConverterUtils.toArrowSchema(child.output)
+    }
     val outputSchema = ConverterUtils.toArrowSchema(output)
-    ColumnarCodegenContext(inputSchema, outputSchema, kernelFunction)
+    ColumnarTransformContext(inputSchema, outputSchema, kernelFunction)
   }
 
   protected override def doExecute()

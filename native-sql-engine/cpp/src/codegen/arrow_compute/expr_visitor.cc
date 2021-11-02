@@ -81,6 +81,10 @@ arrow::Status BuilderVisitor::Visit(const gandiva::FunctionNode& node) {
     RETURN_NOT_OK(ExprVisitor::Make(
         memory_pool_, std::dynamic_pointer_cast<gandiva::FunctionNode>(func_), schema_,
         ret_fields_, &expr_visitor_));
+  } else if (func_name.compare(0, 19, "wholestagetransform") == 0) {
+    RETURN_NOT_OK(ExprVisitor::Make(
+        memory_pool_, std::dynamic_pointer_cast<gandiva::FunctionNode>(func_), schema_,
+        ret_fields_, &expr_visitor_));
   } else if (func_name.compare("standalone") == 0) {
     RETURN_NOT_OK(ExprVisitor::Make(
         memory_pool_, std::dynamic_pointer_cast<gandiva::FunctionNode>(func_), schema_,
@@ -203,6 +207,11 @@ arrow::Status ExprVisitor::Make(arrow::MemoryPool* memory_pool,
   *out =
       std::make_shared<ExprVisitor>(arrow::compute::ExecContext(memory_pool), func_name);
   if (func_name.compare(0, 17, "wholestagecodegen") == 0) {
+    auto function_node =
+        std::dynamic_pointer_cast<gandiva::FunctionNode>(node->children()[0]);
+    RETURN_NOT_OK((*out)->MakeExprVisitorImpl(
+        func_name, function_node, schema_ptr->fields(), ret_fields, (*out).get()));
+  } else if (func_name.compare(0, 19, "wholestagetransform") == 0) {
     auto function_node =
         std::dynamic_pointer_cast<gandiva::FunctionNode>(node->children()[0]);
     RETURN_NOT_OK((*out)->MakeExprVisitorImpl(
@@ -335,6 +344,10 @@ arrow::Status ExprVisitor::MakeExprVisitorImpl(
     RETURN_NOT_OK(
         WholeStageCodeGenVisitorImpl::Make(field_list, func_node, ret_fields, p, &impl_));
     goto finish;
+  } else if (func_name.compare(0, 19, "wholestagetransform") == 0) {
+    RETURN_NOT_OK(WholeStageTransformVisitorImpl::Make(field_list, func_node, ret_fields,
+                                                       p, &impl_));
+    goto finish;
   } else if (func_name.compare("standalone") == 0) {
     auto child_func_name = func_node->descriptor()->name();
     if (child_func_name.compare(0, 22, "conditionedProbeArrays") == 0) {
@@ -349,6 +362,8 @@ arrow::Status ExprVisitor::MakeExprVisitorImpl(
     } else if (child_func_name.compare("CachedRelation") == 0) {
       RETURN_NOT_OK(
           CachedRelationVisitorImpl::Make(field_list, func_node, ret_fields, p, &impl_));
+    } else if (child_func_name.compare("LazyRead") == 0) {
+      RETURN_NOT_OK(LazyReadVisitorImpl::Make(func_node, p, &impl_));
     } else if (child_func_name.compare("ConcatArrayList") == 0) {
       RETURN_NOT_OK(
           ConcatArrayListVisitorImpl::Make(field_list, func_node, ret_fields, p, &impl_));

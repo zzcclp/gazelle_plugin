@@ -58,7 +58,7 @@ case class ColumnarBroadcastHashJoinExec(
     projectList: Seq[NamedExpression] = null,
     nullAware: Boolean = false)
     extends BaseJoinExec
-    with ColumnarCodegenSupport
+    with ColumnarTransformSupport
     with ShuffledJoin {
 
   val sparkConf = sparkContext.getConf
@@ -217,14 +217,14 @@ case class ColumnarBroadcastHashJoinExec(
   }
 
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = streamedPlan match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       c.inputRDDs
     case _ =>
       Seq(streamedPlan.executeColumnar())
   }
   
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = streamedPlan match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       val childPlans = c.getBuildPlans
       childPlans :+ (this, null)
     case _ =>
@@ -232,15 +232,15 @@ case class ColumnarBroadcastHashJoinExec(
   }
 
   override def getStreamedLeafPlan: SparkPlan = streamedPlan match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       c.getStreamedLeafPlan
     case _ =>
       this
   }
 
-  override def dependentPlanCtx: ColumnarCodegenContext = {
+  override def dependentPlanCtx: ColumnarTransformContext = {
     val inputSchema = ConverterUtils.toArrowSchema(buildPlan.output)
-    ColumnarCodegenContext(
+    ColumnarTransformContext(
       inputSchema,
       null,
       ColumnarConditionedProbeJoin.prepareHashBuildFunction(buildKeyExprs, buildPlan.output, 2))
@@ -255,7 +255,7 @@ case class ColumnarBroadcastHashJoinExec(
 
   override def getChild: SparkPlan = streamedPlan
 
-  override def supportColumnarCodegen: Boolean = true
+  override def supportColumnarTransform: Boolean = false
 
   val output_skip_alias =
     if (projectList == null || projectList.isEmpty) super.output
@@ -278,10 +278,10 @@ case class ColumnarBroadcastHashJoinExec(
       isNullAwareAntiJoin = isNullAwareAntiJoin)
   }
 
-  override def doCodeGen: ColumnarCodegenContext = {
+  override def doTransform: ColumnarTransformContext = {
     val childCtx = streamedPlan match {
-      case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
-        c.doCodeGen
+      case c: ColumnarTransformSupport if c.supportColumnarTransform =>
+        c.doTransform
       case _ =>
         null
     }
@@ -301,10 +301,10 @@ case class ColumnarBroadcastHashJoinExec(
           new ArrowType.Int(32, true)),
         ConverterUtils.toArrowSchema(streamedPlan.output))
     }
-    ColumnarCodegenContext(inputSchema, outputSchema, codeGenNode)
+    ColumnarTransformContext(inputSchema, outputSchema, codeGenNode)
   }
 
-  def doCodeGenForStandalone: ColumnarCodegenContext = {
+  def doTransformForStandalone: ColumnarTransformContext = {
     val outputSchema = ConverterUtils.toArrowSchema(output)
     val (codeGenNode, inputSchema) = (
       TreeBuilder.makeFunction(
@@ -312,7 +312,7 @@ case class ColumnarBroadcastHashJoinExec(
         Lists.newArrayList(getKernelFunction),
         new ArrowType.Int(32, true)),
       ConverterUtils.toArrowSchema(streamedPlan.output))
-    ColumnarCodegenContext(inputSchema, outputSchema, codeGenNode)
+    ColumnarTransformContext(inputSchema, outputSchema, codeGenNode)
   }
 
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
@@ -451,17 +451,17 @@ case class ColumnarBroadcastHashJoinExec(
     ArrowUtils.fromAttributes(attributes)
   }
 
-  def getCodeGenCtx: ColumnarCodegenContext = {
-    var resCtx: ColumnarCodegenContext = null
+  def getCodeGenCtx: ColumnarTransformContext = {
+    var resCtx: ColumnarTransformContext = null
     try {
       // If this BHJ contains condition, currently we only support doing codegen through WSCG
-      val childCtx = doCodeGenForStandalone
+      val childCtx = doTransformForStandalone
       val wholeStageCodeGenNode = TreeBuilder.makeFunction(
         s"wholestagecodegen",
         Lists.newArrayList(childCtx.root),
         new ArrowType.Int(32, true))
       resCtx =
-        ColumnarCodegenContext(childCtx.inputSchema, childCtx.outputSchema, wholeStageCodeGenNode)
+        ColumnarTransformContext(childCtx.inputSchema, childCtx.outputSchema, wholeStageCodeGenNode)
     } catch {
       case e: UnsupportedOperationException
           if e.getMessage == "Unsupport to generate native expression from replaceable expression." =>

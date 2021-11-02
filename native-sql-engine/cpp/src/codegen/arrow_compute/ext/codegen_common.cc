@@ -361,6 +361,30 @@ gandiva::ExpressionVector GetGandivaKernel(std::vector<gandiva::NodePtr> key_lis
   return project_list;
 }
 
+gandiva::ExpressionVector GetGandivaKernelWithResField(
+    std::vector<gandiva::NodePtr> key_list, arrow::FieldVector res_field_list) {
+  gandiva::ExpressionVector project_list;
+  int idx = 0;
+  for (auto key : key_list) {
+    auto expr = gandiva::TreeExprBuilder::MakeExpression(key, res_field_list[idx]);
+    project_list.push_back(expr);
+    idx++;
+  }
+  return project_list;
+}
+
+gandiva::ExpressionPtr GetCachedRelationKernel(std::vector<gandiva::NodePtr> key_list) {
+  auto f_res = arrow::field("res", arrow::uint32());
+  auto n_cached_relation = gandiva::TreeExprBuilder::MakeFunction(
+      "standalone",
+      {gandiva::TreeExprBuilder::MakeFunction("CachedRelation", {key_list},
+                                              arrow::uint32())},
+      arrow::uint32());
+  auto cached_relation_expr =
+      gandiva::TreeExprBuilder::MakeExpression(n_cached_relation, f_res);
+  return cached_relation_expr;
+}
+
 gandiva::ExpressionPtr GetHash32Kernel(std::vector<gandiva::NodePtr> key_list,
                                        std::vector<int> key_index_list) {
   // This Project should be do upon GetGandivaKernel

@@ -251,6 +251,24 @@ class CachedRelationKernel : public KernalBase {
   arrow::compute::ExecContext* ctx_ = nullptr;
 };
 
+class LazyReadKernel : public KernalBase {
+ public:
+  static arrow::Status Make(arrow::compute::ExecContext* ctx,
+                            std::shared_ptr<KernalBase>* out);
+  LazyReadKernel(arrow::compute::ExecContext* ctx);
+  arrow::Status Evaluate(arrow::RecordBatchIterator rb_iter) override;
+  arrow::Status MakeResultIterator(
+      std::shared_ptr<arrow::Schema> schema,
+      std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) override;
+  std::string GetSignature() override;
+
+  class Impl;
+
+ private:
+  std::unique_ptr<Impl> impl_;
+  arrow::compute::ExecContext* ctx_ = nullptr;
+};
+
 class WindowSortKernel : public KernalBase {
  public:
   static arrow::Status Make(arrow::compute::ExecContext* ctx,
@@ -428,6 +446,30 @@ class WholeStageCodeGenKernel : public KernalBase {
   std::unique_ptr<Impl> impl_;
   arrow::compute::ExecContext* ctx_ = nullptr;
 };
+class WholeStageTransformKernel : public KernalBase {
+ public:
+  static arrow::Status Make(
+      arrow::compute::ExecContext* ctx,
+      const std::vector<std::shared_ptr<arrow::Field>>& input_field_list,
+      std::shared_ptr<gandiva::Node> root_node,
+      const std::vector<std::shared_ptr<arrow::Field>>& output_field_list,
+      std::shared_ptr<KernalBase>* out);
+  WholeStageTransformKernel(
+      arrow::compute::ExecContext* ctx,
+      const std::vector<std::shared_ptr<arrow::Field>>& input_field_list,
+      std::shared_ptr<gandiva::Node> root_node,
+      const std::vector<std::shared_ptr<arrow::Field>>& output_field_list);
+  arrow::Status MakeResultIterator(
+      std::shared_ptr<arrow::Schema> schema,
+      std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) override;
+  std::string GetSignature() override;
+
+  class Impl;
+
+ private:
+  std::unique_ptr<Impl> impl_;
+  arrow::compute::ExecContext* ctx_ = nullptr;
+};
 class HashRelationKernel : public KernalBase {
  public:
   static arrow::Status Make(
@@ -588,6 +630,27 @@ class FilterKernel : public KernalBase {
       std::vector<std::pair<std::pair<std::string, std::string>, gandiva::DataTypePtr>>
           input,
       std::shared_ptr<CodeGenContext>* codegen_ctx, int* var_id) override;
+  std::string GetSignature() override;
+  class Impl;
+
+ private:
+  std::unique_ptr<Impl> impl_;
+  arrow::compute::ExecContext* ctx_ = nullptr;
+};
+class CondProjectKernel : public KernalBase {
+ public:
+  static arrow::Status Make(arrow::compute::ExecContext* ctx,
+                            const gandiva::NodeVector& input_field_node_list,
+                            const gandiva::NodePtr& condition,
+                            const gandiva::NodeVector& project_list,
+                            std::shared_ptr<KernalBase>* out);
+  CondProjectKernel(arrow::compute::ExecContext* ctx,
+                    const gandiva::NodeVector& input_field_node_list,
+                    const gandiva::NodePtr& condition,
+                    const gandiva::NodeVector& project_list);
+  arrow::Status MakeResultIterator(
+      std::shared_ptr<arrow::Schema> schema,
+      std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) override;
   std::string GetSignature() override;
   class Impl;
 

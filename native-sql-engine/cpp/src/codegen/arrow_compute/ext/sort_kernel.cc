@@ -118,6 +118,20 @@ class SortArraysToIndicesKernel::Impl {
     return arrow::Status::OK();
   }
 
+  virtual std::vector<arrow::ArrayVector> GetCached() {
+    std::vector<arrow::ArrayVector> cols;
+    return cols;
+  }
+
+  virtual uint64_t GetTotalLength() {
+    uint64_t num;
+    return num;
+  }
+
+  virtual arrow::Status FinishInternal(std::shared_ptr<FixedSizeBinaryArray>* out) {
+    return arrow::Status::OK();
+  }
+
   virtual arrow::Status MakeResultIterator(
       std::shared_ptr<arrow::Schema> schema,
       std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) {
@@ -302,9 +316,9 @@ class SortArraysToIndicesKernel::Impl {
   class SorterResultIterator : public ResultIterator<arrow::RecordBatch> {
    public:
     SorterResultIterator(arrow::compute::ExecContext* ctx,
-                         std::shared_ptr<arrow::Schema> schema,
-                         std::shared_ptr<FixedSizeBinaryArray> indices_in,
-                         std::vector<arrow::ArrayVector> cached)
+                         const std::shared_ptr<arrow::Schema>& schema,
+                         const std::shared_ptr<FixedSizeBinaryArray>& indices_in,
+                         const std::vector<arrow::ArrayVector>& cached)
         : ctx_(ctx),
           schema_(schema),
           indices_in_cache_(indices_in),
@@ -324,6 +338,20 @@ class SortArraysToIndicesKernel::Impl {
         for (int array_id = 0; array_id < array_num; array_id++) {
           taker_list_[i]->AddArray(cached_in_[i][array_id]);
         }
+      }
+      batch_size_ = GetBatchSize();
+    }
+
+    SorterResultIterator(arrow::compute::ExecContext* ctx,
+                         SortArraysToIndicesKernel::Impl* impl,
+                         const std::shared_ptr<arrow::Schema>& schema)
+        : ctx_(ctx), impl_(impl), schema_(schema) {
+      col_num_ = schema->num_fields();
+      for (int i = 0; i < col_num_; i++) {
+        auto field = schema->field(i);
+        std::shared_ptr<TakerBase> taker;
+        THROW_NOT_OK(MakeArrayTaker(ctx_, field->type(), &taker));
+        taker_list_.push_back(taker);
       }
       batch_size_ = GetBatchSize();
     }
@@ -370,7 +398,17 @@ class SortArraysToIndicesKernel::Impl {
       return arrow::Status::OK();
     }
 
+    arrow::Status SetChildResIter(
+        const std::shared_ptr<ResultIterator<arrow::RecordBatch>>& iter) override {
+      child_iter_ = iter;
+      return arrow::Status::OK();
+    }
+
     bool HasNext() override {
+      if (cached_in_.size() == 0 && !processed_) {
+        // This function will get all the batches from child iter, and sort them.
+        Process();
+      }
       if (offset_ >= total_length_) {
         return false;
       }
@@ -396,10 +434,12 @@ class SortArraysToIndicesKernel::Impl {
     }
 
    private:
+    bool processed_ = false;
     uint64_t offset_ = 0;
-    const uint64_t total_length_;
+    uint64_t total_length_ = 0;
     std::shared_ptr<arrow::Schema> schema_;
     arrow::compute::ExecContext* ctx_;
+    SortArraysToIndicesKernel::Impl* impl_;
     uint64_t batch_size_;
     int col_num_;
     ArrayItemIndexS* indices_begin_;
@@ -409,6 +449,29 @@ class SortArraysToIndicesKernel::Impl {
     std::shared_ptr<FixedSizeBinaryArray> indices_in_cache_;
     bool is_spilled_ = false;
     std::shared_ptr<SpillableCacheStore> spillablecachestore_;
+    std::shared_ptr<ResultIterator<arrow::RecordBatch>> child_iter_;
+
+    void Process() {
+      while (child_iter_->HasNext()) {
+        std::shared_ptr<arrow::RecordBatch> cb;
+        child_iter_->Next(&cb);
+        auto cols = cb->columns();
+        if (cb->num_rows() != 0) {
+          THROW_NOT_OK(impl_->Evaluate(cols));
+        }
+      }
+      THROW_NOT_OK(impl_->FinishInternal(&indices_in_cache_));
+      indices_begin_ = (ArrayItemIndexS*)indices_in_cache_->value_data();
+      cached_in_ = impl_->GetCached();
+      total_length_ = impl_->GetTotalLength();
+      for (int i = 0; i < col_num_; i++) {
+        int array_num = cached_in_[i].size();
+        for (int array_id = 0; array_id < array_num; array_id++) {
+          taker_list_[i]->AddArray(cached_in_[i][array_id]);
+        }
+      }
+      processed_ = true;
+    }
   };
 
  protected:
@@ -920,7 +983,7 @@ class SortOnekeyKernel : public SortArraysToIndicesKernel::Impl {
     items_total_ += in[key_id_]->length();
     length_list_.push_back(in[key_id_]->length());
     if (cached_.size() <= col_num_) {
-      cached_.resize(col_num_ + 1);
+      cached_.resize(col_num_);
     }
 
     for (int i = 0; i < col_num_; i++) {
@@ -929,6 +992,10 @@ class SortOnekeyKernel : public SortArraysToIndicesKernel::Impl {
 
     return arrow::Status::OK();
   }
+
+  std::vector<arrow::ArrayVector> GetCached() override { return cached_; }
+
+  uint64_t GetTotalLength() override { return items_total_; }
 
   arrow::Status Spill(int64_t size, int64_t* spilled_size) {
     // do spill
@@ -1197,10 +1264,14 @@ class SortOnekeyKernel : public SortArraysToIndicesKernel::Impl {
       std::shared_ptr<arrow::Schema> schema,
       std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) override {
     std::shared_ptr<FixedSizeBinaryArray> indices_out;
-    RETURN_NOT_OK(FinishInternal(&indices_out));
-
-    local_result_iter_ = std::make_shared<SorterResultIterator>(ctx_, schema, indices_out,
-                                                                std::move(cached_));
+    if (cached_.size() != 0) {
+      RETURN_NOT_OK(FinishInternal(&indices_out));
+      local_result_iter_ = std::make_shared<SorterResultIterator>(
+          ctx_, schema, indices_out, std::move(cached_));
+    } else {
+      // lazy sort
+      local_result_iter_ = std::make_shared<SorterResultIterator>(ctx_, this, schema);
+    }
     *out = local_result_iter_;
     return arrow::Status::OK();
   }
@@ -1322,7 +1393,7 @@ class SortArraysCodegenKernel : public SortArraysToIndicesKernel::Impl {
   arrow::Status Evaluate(ArrayList& in) override {
     num_batches_++;
     if (cached_.size() <= col_num_) {
-      cached_.resize(col_num_ + 1);
+      cached_.resize(col_num_);
     }
     if (!key_projector_) {
       ArrayList key_cols;
@@ -1837,7 +1908,7 @@ class SortMultiplekeyKernel : public SortArraysToIndicesKernel::Impl {
   arrow::Status Evaluate(ArrayList& in) override {
     num_batches_++;
     if (cached_.size() <= col_num_) {
-      cached_.resize(col_num_ + 1);
+      cached_.resize(col_num_);
     }
     for (int i = 0; i < col_num_; i++) {
       cached_[i].push_back(in[i]);

@@ -613,7 +613,24 @@ class ConditionedProbeKernel::Impl {
       return arrow::Status::OK();
     }
 
+    arrow::Status SetChildResIter(
+        const std::shared_ptr<ResultIterator<arrow::RecordBatch>>& iter) override {
+      child_iter_ = iter;
+      return arrow::Status::OK();
+    }
+
+    bool HasNext() override { return child_iter_->HasNext(); }
+
+    arrow::Status Next(std::shared_ptr<arrow::RecordBatch>* out) override {
+      std::shared_ptr<arrow::RecordBatch> cb;
+      RETURN_NOT_OK(child_iter_->Next(&cb));
+      Process(cb->columns(), out);
+      return arrow::Status::OK();
+    }
+
    private:
+    std::shared_ptr<ResultIterator<arrow::RecordBatch>> child_iter_;
+
     class ProbeFunctionBase {
      public:
       virtual ~ProbeFunctionBase() {}

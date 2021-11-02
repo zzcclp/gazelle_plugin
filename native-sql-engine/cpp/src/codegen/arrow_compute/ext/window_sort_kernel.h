@@ -530,7 +530,7 @@ class WindowSortOnekeyKernel : public WindowSortKernel::Impl {
     cached_key_.push_back(std::make_shared<ArrayType_key>(in[key_id_]));
     length_list_.push_back(in[key_id_]->length());
     if (cached_.size() <= col_num_) {
-      cached_.resize(col_num_ + 1);
+      cached_.resize(col_num_);
     }
     for (int i = 0; i < col_num_; i++) {
       cached_[i].push_back(in[i]);

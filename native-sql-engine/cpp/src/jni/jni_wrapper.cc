@@ -560,6 +560,144 @@ Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeEvaluateWithIt
   }
 }
 
+JNIEXPORT jlong JNICALL
+Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeCreateKernelWithIterator(
+    JNIEnv* env, jobject obj, jlong memory_pool_id, jbyteArray ws_in_schema_arr,
+    jbyteArray ws_exprs_arr, jbyteArray ws_res_schema_arr, jbyteArray in_exprs_arr,
+    jobject itr, jlongArray dep_ids, jboolean return_when_finish = false) {
+  arrow::Status msg;
+  JavaVM* vm;
+  if (env->GetJavaVM(&vm) != JNI_OK) {
+    std::string error_message = "Unable to get JavaVM instance";
+    env->ThrowNew(io_exception_class, error_message.c_str());
+  }
+  // Get input schema
+  std::shared_ptr<arrow::Schema> ws_in_schema;
+  msg = MakeSchema(env, ws_in_schema_arr, &ws_in_schema);
+  if (!msg.ok()) {
+    std::string error_message = "failed to readSchema, err msg is " + msg.message();
+    env->ThrowNew(io_exception_class, error_message.c_str());
+  }
+  // Get in handler
+  gandiva::ExpressionVector in_expr_vector;
+  gandiva::FieldVector in_ret_types;
+  msg = MakeExprVector(env, in_exprs_arr, &in_expr_vector, &in_ret_types);
+  if (!msg.ok()) {
+    std::string error_message =
+        "failed to parse expressions protobuf, err msg is " + msg.message();
+    env->ThrowNew(io_exception_class, error_message.c_str());
+  }
+  std::shared_ptr<CodeGenerator> in_handler;
+  try {
+    arrow::MemoryPool* pool = reinterpret_cast<arrow::MemoryPool*>(memory_pool_id);
+    if (pool == nullptr) {
+      env->ThrowNew(illegal_argument_exception_class,
+                    "Memory pool does not exist or has been closed");
+      return -1;
+    }
+    in_ret_types = ws_in_schema->fields();
+    msg = sparkcolumnarplugin::codegen::CreateCodeGenerator(
+        pool, ws_in_schema, in_expr_vector, in_ret_types, &in_handler,
+        return_when_finish);
+  } catch (const std::runtime_error& error) {
+    env->ThrowNew(unsupportedoperation_exception_class, error.what());
+  } catch (const std::exception& error) {
+    env->ThrowNew(io_exception_class, error.what());
+  }
+  if (!msg.ok()) {
+    std::string error_message =
+        "nativeCreateKernelWithIterator: failed to create CodeGenerator, err msg is " +
+        msg.message();
+    env->ThrowNew(io_exception_class, error_message.c_str());
+  }
+  // Get the input iter
+  jobject in_itr = env->NewGlobalRef(itr);
+  arrow::Result<arrow::RecordBatchIterator> rb_itr_status =
+      MakeJavaRecordBatchIterator(vm, in_itr, ws_in_schema);
+  if (!rb_itr_status.ok()) {
+    std::string error_message =
+        "nativeCreateKernelWithIterator: error making java iterator" +
+        rb_itr_status.status().ToString();
+    env->ThrowNew(io_exception_class, error_message.c_str());
+  }
+  msg = in_handler->evaluate(std::move(rb_itr_status.ValueOrDie()));
+  if (!msg.ok()) {
+    std::string error_message =
+        "nativeCreateKernelWithIterator: evaluate failed with error msg " +
+        msg.ToString();
+    env->ThrowNew(io_exception_class, error_message.c_str());
+  }
+
+  std::shared_ptr<ResultIteratorBase> in_result_iterator;
+  msg = in_handler->finish(&in_result_iterator);
+  // Get the ws iter
+  gandiva::ExpressionVector ws_expr_vector;
+  gandiva::FieldVector ws_ret_types;
+  msg = MakeExprVector(env, ws_exprs_arr, &ws_expr_vector, &ws_ret_types);
+  if (!msg.ok()) {
+    std::string error_message =
+        "failed to parse expressions protobuf, err msg is " + msg.message();
+    env->ThrowNew(io_exception_class, error_message.c_str());
+  }
+  if (ws_res_schema_arr != nullptr) {
+    std::shared_ptr<arrow::Schema> ws_res_schema;
+    msg = MakeSchema(env, ws_res_schema_arr, &ws_res_schema);
+    if (!msg.ok()) {
+      std::string error_message = "failed to readSchema, err msg is " + msg.message();
+      env->ThrowNew(io_exception_class, error_message.c_str());
+    }
+    ws_ret_types = ws_res_schema->fields();
+  }
+  std::shared_ptr<CodeGenerator> ws_handler;
+  try {
+    arrow::MemoryPool* pool = reinterpret_cast<arrow::MemoryPool*>(memory_pool_id);
+    if (pool == nullptr) {
+      env->ThrowNew(illegal_argument_exception_class,
+                    "Memory pool does not exist or has been closed");
+      return -1;
+    }
+    msg = sparkcolumnarplugin::codegen::CreateCodeGenerator(
+        pool, ws_in_schema, ws_expr_vector, ws_ret_types, &ws_handler,
+        return_when_finish);
+  } catch (const std::runtime_error& error) {
+    env->ThrowNew(unsupportedoperation_exception_class, error.what());
+  } catch (const std::exception& error) {
+    env->ThrowNew(io_exception_class, error.what());
+  }
+  if (!msg.ok()) {
+    std::string error_message =
+        "nativeCreateKernelWithIterator: failed to create CodeGenerator, err msg is " +
+        msg.message();
+    env->ThrowNew(io_exception_class, error_message.c_str());
+  }
+  std::shared_ptr<ResultIteratorBase> ws_result_iterator;
+  msg = ws_handler->finish(&ws_result_iterator);
+  // Set dependencies
+  int ids_size = env->GetArrayLength(dep_ids);
+  long* ids_data = env->GetLongArrayElements(dep_ids, 0);
+  std::vector<std::shared_ptr<ResultIteratorBase>> dep_iter_list;
+  // Set the input iter as dependency
+  dep_iter_list.push_back(in_result_iterator);
+  // Set other dependencies
+  for (int i = 0; i < ids_size; i++) {
+    auto iter = GetBatchIterator(env, ids_data[i]);
+    dep_iter_list.push_back(iter);
+  }
+  auto typed_result_iterator =
+      std::dynamic_pointer_cast<ResultIterator<arrow::RecordBatch>>(ws_result_iterator);
+  msg = typed_result_iterator->SetDependencies(dep_iter_list);
+  if (!msg.ok()) {
+    std::string error_message =
+        "nativeCreateKernelWithIterator: Error "
+        "msg " +
+        msg.ToString();
+    env->ThrowNew(io_exception_class, error_message.c_str());
+  }
+  // Handle release
+  env->ReleaseLongArrayElements(dep_ids, ids_data, JNI_ABORT);
+  return batch_iterator_holder_.Insert(std::move(ws_result_iterator));
+}
+
 JNIEXPORT jstring JNICALL
 Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeGetSignature(
     JNIEnv* env, jobject obj, jlong id) {

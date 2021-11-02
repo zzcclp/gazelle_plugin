@@ -68,7 +68,7 @@ case class ColumnarSortMergeJoinExec(
     isSkewJoin: Boolean = false,
     projectList: Seq[NamedExpression] = null)
     extends BinaryExecNode
-    with ColumnarCodegenSupport {
+    with ColumnarTransformSupport {
 
   val sparkConf = sparkContext.getConf
   override lazy val metrics = Map(
@@ -229,13 +229,13 @@ case class ColumnarSortMergeJoinExec(
 
   /*****************  WSCG related function ******************/
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = streamedPlan match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       c.inputRDDs
     case _ =>
       Seq(streamedPlan.executeColumnar())
   }
 
-  override def supportColumnarCodegen: Boolean = true
+  override def supportColumnarTransform: Boolean = false
 
   val output_skip_alias =
     if (projectList == null || projectList.isEmpty) output
@@ -257,17 +257,17 @@ case class ColumnarSortMergeJoinExec(
     val curBuildPlan: Seq[(SparkPlan, SparkPlan)] = buildPlan match {
       case s: ColumnarSortExec =>
         Seq((s, this))
-      case c: ColumnarCodegenSupport
-          if !c.isInstanceOf[ColumnarSortExec] && c.supportColumnarCodegen == true =>
+      case c: ColumnarTransformSupport
+          if !c.isInstanceOf[ColumnarSortExec] && c.supportColumnarTransform == true =>
         c.getBuildPlans
       case other =>
         /* should be ColumnarInputAdapter or others */
         Seq((other, this))
     }
     streamedPlan match {
-      case c: ColumnarCodegenSupport if c.isInstanceOf[ColumnarSortExec] =>
+      case c: ColumnarTransformSupport if c.isInstanceOf[ColumnarSortExec] =>
         curBuildPlan ++ Seq((c, this))
-      case c: ColumnarCodegenSupport if !c.isInstanceOf[ColumnarSortExec] =>
+      case c: ColumnarTransformSupport if !c.isInstanceOf[ColumnarSortExec] =>
         c.getBuildPlans ++ curBuildPlan
       case _ =>
         curBuildPlan
@@ -275,7 +275,7 @@ case class ColumnarSortMergeJoinExec(
   }
 
   override def getStreamedLeafPlan: SparkPlan = streamedPlan match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       c.getStreamedLeafPlan
     case _ =>
       this
@@ -290,10 +290,10 @@ case class ColumnarSortMergeJoinExec(
 
   override def getChild: SparkPlan = streamedPlan
 
-  override def doCodeGen: ColumnarCodegenContext = {
+  override def doTransform: ColumnarTransformContext = {
     val childCtx = streamedPlan match {
-      case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
-        c.doCodeGen
+      case c: ColumnarTransformSupport if c.supportColumnarTransform =>
+        c.doTransform
       case _ =>
         null
     }
@@ -313,7 +313,7 @@ case class ColumnarSortMergeJoinExec(
           new ArrowType.Int(32, true)),
         new Schema(Lists.newArrayList()))
     }
-    ColumnarCodegenContext(inputSchema, outputSchema, codeGenNode)
+    ColumnarTransformContext(inputSchema, outputSchema, codeGenNode)
   }
   //do not call prebuild so we could skip the c++ codegen
   //val triggerBuildSignature = getCodeGenSignature

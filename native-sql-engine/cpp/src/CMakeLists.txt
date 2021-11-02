@@ -496,6 +496,7 @@ set(SPARK_COLUMNAR_PLUGIN_SRCS
         codegen/arrow_compute/ext/codegen_register.cc
         codegen/arrow_compute/ext/actions_impl.cc
         codegen/arrow_compute/ext/whole_stage_codegen_kernel.cc
+        codegen/arrow_compute/ext/whole_stage_transform_kernel.cc
         codegen/arrow_compute/ext/hash_relation_kernel.cc
         codegen/arrow_compute/ext/conditioned_probe_kernel.cc
         codegen/arrow_compute/ext/conditioned_merge_join_kernel.cc

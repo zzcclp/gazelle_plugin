@@ -355,7 +355,7 @@ case class ColumnarOverrideRules(session: SparkSession) extends ColumnarRule wit
   def preOverrides = ColumnarPreOverrides()
   def postOverrides = ColumnarPostOverrides()
 
-  val columnarWholeStageEnabled = conf.getBoolean("spark.oap.sql.columnar.wholestagecodegen", defaultValue = true)
+  val columnarWholeStageEnabled = conf.getBoolean("spark.oap.sql.columnar.wholestagetransform", defaultValue = true)
   def collapseOverrides = ColumnarCollapseCodegenStages(columnarWholeStageEnabled)
 
   var isSupportAdaptive: Boolean = true

@@ -57,7 +57,7 @@ case class ColumnarSortExec(
     child: SparkPlan,
     testSpillFrequency: Int = 0)
     extends UnaryExecNode
-    with ColumnarCodegenSupport {
+    with ColumnarTransformSupport {
 
   val sparkConf = sparkContext.getConf
   val numaBindingInfo = GazellePluginConfig.getConf.numaBindingInfo
@@ -120,16 +120,16 @@ case class ColumnarSortExec(
 
   /*****************  WSCG related function ******************/
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform =>
       c.inputRDDs
     case _ =>
       Seq(child.executeColumnar())
   }
 
-  override def supportColumnarCodegen: Boolean = true
+  override def supportColumnarTransform: Boolean = false
 
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = child match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       val childPlans = c.getBuildPlans
       childPlans :+ (this, null)
     case _ =>
@@ -137,7 +137,7 @@ case class ColumnarSortExec(
   }
 
   override def getStreamedLeafPlan: SparkPlan = child match {
-    case c: ColumnarCodegenSupport if c.supportColumnarCodegen == true =>
+    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
       c.getStreamedLeafPlan
     case _ =>
       this
@@ -152,18 +152,44 @@ case class ColumnarSortExec(
 
   override def getChild: SparkPlan = child
 
-  override def dependentPlanCtx: ColumnarCodegenContext = {
+  override def dependentPlanCtx: ColumnarTransformContext = {
     // Originally, Sort dependent kernel is SortKernel
     // While since we noticed that
     val inputSchema = ConverterUtils.toArrowSchema(child.output)
     val outSchema = ConverterUtils.toArrowSchema(output)
-    ColumnarCodegenContext(
+    ColumnarTransformContext(
       inputSchema,
       outSchema,
       ColumnarSorter.prepareRelationFunction(sortOrder, child.output))
   }
 
-  override def doCodeGen: ColumnarCodegenContext = null
+  override def doTransform: ColumnarTransformContext = {
+    val childCtx = child match {
+      case c: ColumnarTransformSupport if c.supportColumnarTransform =>
+        c.doTransform
+      case _ =>
+        null
+    }
+    val outputSchema = ConverterUtils.toArrowSchema(output)
+    val sortNode =
+      ColumnarSorter.getKernelFunction(sortOrder, child.output, sparkConf)
+    val (codeGenNode, inputSchema) = if (childCtx != null) {
+      (
+        TreeBuilder.makeFunction(
+          s"child",
+          Lists.newArrayList(sortNode, childCtx.root),
+          new ArrowType.Int(32, true)),
+        childCtx.inputSchema)
+    } else {
+      (
+        TreeBuilder.makeFunction(
+          s"child",
+          Lists.newArrayList(sortNode),
+          new ArrowType.Int(32, true)),
+        childCtx.inputSchema)
+    }
+    ColumnarTransformContext(inputSchema, outputSchema, codeGenNode)
+  }
 
   /***********************************************************/
   def getCodeGenSignature =

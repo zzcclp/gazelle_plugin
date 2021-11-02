@@ -211,6 +211,18 @@ public class ExpressionEvaluatorJniWrapper {
         native long nativeFinishByIterator(long nativeHandler) throws RuntimeException;
 
         /**
+         * Call Finish to create a whole_stage_transfrom kernel, result will be as a iterator.
+         *
+         * @param nativeHandler nativeHandler of this expression
+         * @return iterator instance id
+         */
+        native long nativeCreateKernelWithIterator(long nativeHandler, byte[] wsInSchemaBuf,
+                                                   byte[] wsExprListBuf, byte[] wsResSchemaBuf,
+                                                   byte[] inExprListBuf,
+                                                   ColumnarNativeIterator batchItr,
+                                                   long[] dependencies, boolean finishReturn) throws RuntimeException;
+
+        /**
          * Set another evaluator's iterator as this one's dependency.
          *
          * @param nativeHandler   nativeHandler of this expression

@@ -703,6 +703,12 @@ class HashAggregateKernel::Impl {
       aggr_hash_table_ = std::make_shared<SparseHashMap<T>>(ctx->memory_pool());
     }
 
+    arrow::Status SetChildResIter(
+        const std::shared_ptr<ResultIterator<arrow::RecordBatch>>& iter) override {
+      child_iter_ = iter;
+      return arrow::Status::OK();
+    }
+
     arrow::Status ProcessAndCacheOne(
         const std::vector<std::shared_ptr<arrow::Array>>& orig_in,
         const std::shared_ptr<arrow::Array>& selection = nullptr) override {
@@ -797,9 +803,14 @@ class HashAggregateKernel::Impl {
       return arrow::Status::OK();
     }
 
-    bool HasNext() { return offset_ < total_out_length_; }
+    bool HasNext() override {
+      if (child_iter_ && !processed_) {
+        Process();
+      }
+      return offset_ < total_out_length_;
+    }
 
-    arrow::Status Next(std::shared_ptr<arrow::RecordBatch>* out) {
+    arrow::Status Next(std::shared_ptr<arrow::RecordBatch>* out) override {
       uint64_t out_length = 0;
       int gp_idx = 0;
       std::vector<std::shared_ptr<arrow::Array>> outputs;
@@ -826,10 +837,23 @@ class HashAggregateKernel::Impl {
     std::shared_ptr<GandivaProjector> pre_process_projector_;
     std::shared_ptr<GandivaProjector> post_process_projector_;
     std::shared_ptr<arrow::Schema> result_schema_;
+    std::shared_ptr<ResultIterator<arrow::RecordBatch>> child_iter_;
+    bool processed_ = false;
     int max_group_id_ = -1;
     int offset_ = 0;
     int total_out_length_ = 0;
     int batch_size_;
+
+    void Process() {
+      while (child_iter_->HasNext()) {
+        std::shared_ptr<arrow::RecordBatch> cb;
+        child_iter_->Next(&cb);
+        if (cb->num_rows() != 0) {
+          ProcessAndCacheOne(cb->columns());
+        }
+      }
+      processed_ = true;
+    }
   };
 
   template <typename DataType>
@@ -858,6 +882,12 @@ class HashAggregateKernel::Impl {
       if (key_index_list.size() > 1) {
         aggr_key_unsafe_row = std::make_shared<UnsafeRow>(key_index_list.size());
       }
+    }
+
+    arrow::Status SetChildResIter(
+        const std::shared_ptr<ResultIterator<arrow::RecordBatch>>& iter) override {
+      child_iter_ = iter;
+      return arrow::Status::OK();
     }
 
     arrow::Status ProcessAndCacheOne(
@@ -955,9 +985,14 @@ class HashAggregateKernel::Impl {
       return arrow::Status::OK();
     }
 
-    bool HasNext() { return offset_ < total_out_length_; }
+    bool HasNext() override {
+      if (child_iter_ && !processed_) {
+        Process();
+      }
+      return offset_ < total_out_length_;
+    }
 
-    arrow::Status Next(std::shared_ptr<arrow::RecordBatch>* out) {
+    arrow::Status Next(std::shared_ptr<arrow::RecordBatch>* out) override {
       uint64_t out_length = 0;
       int gp_idx = 0;
       std::vector<std::shared_ptr<arrow::Array>> outputs;
@@ -985,10 +1020,25 @@ class HashAggregateKernel::Impl {
     std::shared_ptr<GandivaProjector> post_process_projector_;
     std::shared_ptr<UnsafeRow> aggr_key_unsafe_row;
     std::shared_ptr<arrow::Schema> result_schema_;
+    std::shared_ptr<ResultIterator<arrow::RecordBatch>> child_iter_;
+    bool processed_ = false;
     int max_group_id_ = -1;
     int offset_ = 0;
     int total_out_length_ = 0;
     int batch_size_;
+
+    void Process() {
+      bool child_has_next = child_iter_->HasNext();
+      while (child_has_next) {
+        std::shared_ptr<arrow::RecordBatch> cb;
+        child_iter_->Next(&cb);
+        if (cb->num_rows() != 0) {
+          ProcessAndCacheOne(cb->columns());
+        }
+        child_has_next = child_iter_->HasNext();
+      }
+      processed_ = true;
+    }
   };
 
   template <typename DataType>
@@ -1167,7 +1217,7 @@ HashAggregateKernel::HashAggregateKernel(
     std::vector<std::shared_ptr<gandiva::Node>> result_expr_node_list) {
   impl_.reset(new Impl(ctx, input_field_list, action_list, result_field_node_list,
                        result_expr_node_list));
-  kernel_name_ = "HashAggregateKernelKernel";
+  kernel_name_ = "HashAggregateKernel";
   ctx_ = ctx;
 }
 #undef PROCESS_SUPPORTED_TYPES

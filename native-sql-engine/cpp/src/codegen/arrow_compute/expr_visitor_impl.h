@@ -647,6 +647,70 @@ class CachedRelationVisitorImpl : public ExprVisitorImpl {
   std::shared_ptr<arrow::Schema> result_schema_;
 };
 
+class LazyReadVisitorImpl : public ExprVisitorImpl {
+ public:
+  LazyReadVisitorImpl(std::shared_ptr<gandiva::FunctionNode> root_node, ExprVisitor* p)
+      : root_node_(root_node), ExprVisitorImpl(p) {}
+
+  static arrow::Status Make(std::shared_ptr<gandiva::FunctionNode> root_node,
+                            ExprVisitor* p, std::shared_ptr<ExprVisitorImpl>* out) {
+    auto impl = std::make_shared<LazyReadVisitorImpl>(root_node, p);
+    *out = impl;
+    return arrow::Status::OK();
+  }
+
+  arrow::Status Init() override {
+    if (initialized_) {
+      return arrow::Status::OK();
+    }
+    RETURN_NOT_OK(extra::LazyReadKernel::Make(&p_->ctx_, &kernel_));
+    initialized_ = true;
+    finish_return_type_ = ArrowComputeResultType::BatchIterator;
+    return arrow::Status::OK();
+  }
+
+  arrow::Status Eval() override {
+    switch (p_->dependency_result_type_) {
+      case ArrowComputeResultType::None: {
+        if (p_->input_type_ == ArrowComputeInputType::Iterator) {
+          RETURN_NOT_OK(kernel_->Evaluate(std::move(p_->in_iterator_)));
+        } else {
+          return arrow::Status::NotImplemented(
+              "LazyReadVisitorImpl: Does not support this type of input.");
+        }
+      } break;
+      default:
+        return arrow::Status::NotImplemented(
+            "LazyReadVisitorImpl: Does not support this type of input.");
+    }
+    return arrow::Status::OK();
+  }
+
+  arrow::Status MakeResultIterator(std::shared_ptr<arrow::Schema> schema,
+                                   std::shared_ptr<ResultIteratorBase>* out) override {
+    switch (finish_return_type_) {
+      case ArrowComputeResultType::BatchIterator: {
+        if (result_type_ == 0) {
+          std::shared_ptr<ResultIterator<arrow::RecordBatch>> iter_out;
+          TIME_MICRO_OR_RAISE(p_->elapse_time_,
+                              kernel_->MakeResultIterator(schema, &iter_out));
+          *out = std::dynamic_pointer_cast<ResultIteratorBase>(iter_out);
+        }
+        p_->return_type_ = ArrowComputeResultType::BatchIterator;
+      } break;
+      default:
+        return arrow::Status::Invalid(
+            "LazyReadVisitorImpl MakeResultIterator does not support "
+            "dependency type other than Batch.");
+    }
+    return arrow::Status::OK();
+  }
+
+ private:
+  std::shared_ptr<gandiva::FunctionNode> root_node_;
+  int result_type_ = 0;
+};
+
 ////////////////////////// ConditionedProbeArraysVisitorImpl
 //////////////////////////
 class ConditionedProbeArraysVisitorImpl : public ExprVisitorImpl {
@@ -911,6 +975,64 @@ class WholeStageCodeGenVisitorImpl : public ExprVisitorImpl {
       default:
         return arrow::Status::Invalid(
             "WholeStageCodeGenVisitorImpl MakeResultIterator does not support "
+            "dependency type other than Batch.");
+    }
+    return arrow::Status::OK();
+  }
+
+ private:
+  std::shared_ptr<gandiva::Node> root_node_;
+  std::vector<std::shared_ptr<arrow::Field>> field_list_;
+  std::vector<std::shared_ptr<arrow::Field>> ret_fields_;
+};
+
+////////////////////////// WholeStageTransformVisitorImpl ///////////////////////
+class WholeStageTransformVisitorImpl : public ExprVisitorImpl {
+ public:
+  WholeStageTransformVisitorImpl(std::vector<std::shared_ptr<arrow::Field>> field_list,
+                                 std::shared_ptr<gandiva::Node> root_node,
+                                 std::vector<std::shared_ptr<arrow::Field>> ret_fields,
+                                 ExprVisitor* p)
+      : root_node_(root_node),
+        field_list_(field_list),
+        ret_fields_(ret_fields),
+        ExprVisitorImpl(p) {
+    finish_return_type_ = ArrowComputeResultType::BatchIterator;
+  }
+  static arrow::Status Make(std::vector<std::shared_ptr<arrow::Field>> field_list,
+                            std::shared_ptr<gandiva::Node> root_node,
+                            std::vector<std::shared_ptr<arrow::Field>> ret_fields,
+                            ExprVisitor* p, std::shared_ptr<ExprVisitorImpl>* out) {
+    auto impl = std::make_shared<WholeStageTransformVisitorImpl>(field_list, root_node,
+                                                                 ret_fields, p);
+    *out = impl;
+    return arrow::Status::OK();
+  }
+
+  arrow::Status Init() override {
+    if (initialized_) {
+      return arrow::Status::OK();
+    }
+    RETURN_NOT_OK(extra::WholeStageTransformKernel::Make(
+        &p_->ctx_, field_list_, root_node_, ret_fields_, &kernel_));
+    p_->signature_ = kernel_->GetSignature();
+    initialized_ = true;
+    return arrow::Status::OK();
+  }
+
+  arrow::Status MakeResultIterator(std::shared_ptr<arrow::Schema> schema,
+                                   std::shared_ptr<ResultIteratorBase>* out) override {
+    switch (finish_return_type_) {
+      case ArrowComputeResultType::BatchIterator: {
+        std::shared_ptr<ResultIterator<arrow::RecordBatch>> iter_out;
+        TIME_MICRO_OR_RAISE(p_->elapse_time_,
+                            kernel_->MakeResultIterator(schema, &iter_out));
+        *out = std::dynamic_pointer_cast<ResultIteratorBase>(iter_out);
+        p_->return_type_ = ArrowComputeResultType::Batch;
+      } break;
+      default:
+        return arrow::Status::Invalid(
+            "WholeStageTransformVisitorImpl MakeResultIterator does not support "
             "dependency type other than Batch.");
     }
     return arrow::Status::OK();

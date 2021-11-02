@@ -25,6 +25,7 @@
 #include <string>
 
 #include "codegen/arrow_compute/ext/code_generator_base.h"
+#include "codegen/arrow_compute/ext/kernels_ext.h"
 
 namespace sparkcolumnarplugin {
 namespace codegen {
@@ -54,6 +55,8 @@ gandiva::ExpressionPtr GetHash32Kernel(std::vector<gandiva::NodePtr> key_list);
 gandiva::ExpressionPtr GetHash32Kernel(std::vector<gandiva::NodePtr> key_list,
                                        std::vector<int> key_index_list);
 gandiva::ExpressionVector GetGandivaKernel(std::vector<gandiva::NodePtr> key_list);
+gandiva::ExpressionVector GetGandivaKernelWithResField(
+    std::vector<gandiva::NodePtr> key_list, arrow::FieldVector res_field_list);
 template <typename T>
 std::string GetStringFromList(std::vector<T> list) {
   std::stringstream ss;
@@ -86,6 +89,37 @@ arrow::Status CompileCodes(std::string codes, std::string signature);
 
 arrow::Status LoadLibrary(std::string signature, arrow::compute::ExecContext* ctx,
                           std::shared_ptr<CodeGenBase>* out);
+
+/* This struct is used for conducting WSCG in ws transform */
+struct KernelInfo {
+  KernelInfo(
+      const std::shared_ptr<KernalBase>& kernel,
+      const std::shared_ptr<ResultIterator<arrow::RecordBatch>>& res_iter,
+      const std::vector<std::shared_ptr<arrow::Field>>& input_fields,
+      const std::vector<std::shared_ptr<arrow::Field>>& res_fields,
+      const std::string& kernel_name,
+      const std::vector<std::shared_ptr<ResultIteratorBase>>& dependent_iter_list = {},
+      const std::shared_ptr<gandiva::FunctionNode>& function_node = nullptr)
+      : kernel(kernel),
+        kernel_name(kernel_name),
+        input_fields(input_fields),
+        res_fields(res_fields),
+        res_iter(res_iter),
+        dependent_iter_list(dependent_iter_list),
+        function_node(function_node) {}
+
+  void setDoCodegen(bool will_do_wscg) { do_wscg = will_do_wscg; }
+
+  std::string kernel_name;
+  std::shared_ptr<KernalBase> kernel;
+  std::vector<std::shared_ptr<arrow::Field>> input_fields;
+  std::vector<std::shared_ptr<arrow::Field>> res_fields;
+  std::shared_ptr<ResultIterator<arrow::RecordBatch>> res_iter;
+  std::vector<std::shared_ptr<ResultIteratorBase>> dependent_iter_list;
+  std::shared_ptr<gandiva::FunctionNode> function_node;
+  bool do_wscg = false;
+};
+
 }  // namespace extra
 }  // namespace arrowcompute
 }  // namespace codegen

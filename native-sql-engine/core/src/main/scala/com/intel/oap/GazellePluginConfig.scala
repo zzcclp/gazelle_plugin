@@ -116,7 +116,7 @@ class GazellePluginConfig(conf: SQLConf) extends Logging {
 
   // enable or disable columnar wholestagecodegen  
   val enableColumnarWholeStageCodegen: Boolean =
-    conf.getConfString("spark.oap.sql.columnar.wholestagecodegen", "true").toBoolean && enableCpu
+    conf.getConfString("spark.oap.sql.columnar.wholestagetransform", "true").toBoolean && enableCpu
   
   // enable or disable columnar exchange
   val enableColumnarShuffle: Boolean = conf

@@ -73,6 +73,10 @@ class ResultIterator : public ResultIteratorBase {
       const std::vector<std::shared_ptr<ResultIteratorBase>>&) {
     return arrow::Status::NotImplemented("ResultIterator abstract SetDependencies()");
   }
+  virtual arrow::Status SetChildResIter(
+      const std::shared_ptr<ResultIterator<arrow::RecordBatch>>&) {
+    return arrow::Status::NotImplemented("ResultIterator abstract SetChildResIter()");
+  }
   virtual arrow::Status GetResult(std::shared_ptr<arrow::RecordBatch>* out) {
     return arrow::Status::NotImplemented("ResultIterator abstract GetResult()");
   }
