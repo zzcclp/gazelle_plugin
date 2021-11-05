@@ -527,6 +527,5 @@ object ColumnarHashAggregation extends Logging {
       output,
       sparkConf)
     ins.prepareKernelFunction
-
   }
 }

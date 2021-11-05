@@ -429,10 +429,10 @@ object ColumnarWindowExec extends Logging {
             a.withNewChildren(List(makeOutputProject(a.child, windows, inProjectExpressions)))
               .asInstanceOf[NamedExpression]
           }
-        val inputProject = ColumnarConditionProjectExec(null,
+        val inputProject = ConditionProjectExecTransformer(null,
           child.output ++ inProjectExpressions, child)
         val window = new ColumnarWindowExec(windows, partitionSpec, orderSpec, inputProject)
-        val outputProject = ColumnarConditionProjectExec(null,
+        val outputProject = ConditionProjectExecTransformer(null,
           child.output ++ outProjectExpressions, window)
         outputProject
     }

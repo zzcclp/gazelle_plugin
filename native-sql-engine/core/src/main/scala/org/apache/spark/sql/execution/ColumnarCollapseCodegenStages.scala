@@ -119,8 +119,8 @@ case class ColumnarCollapseCodegenStages(
     extends Rule[SparkPlan] {
 
   private def supportCodegen(plan: SparkPlan): Boolean = plan match {
-    case plan: ColumnarTransformSupport =>
-      plan.supportColumnarTransform
+    case plan: TransformSupport =>
+      plan.supportTransform
     case _ => false
   }
 
@@ -149,13 +149,13 @@ case class ColumnarCollapseCodegenStages(
       else plan.children.map(existsJoins(_, count + 1)).exists(_ == true)
     case p: ColumnarSortMergeJoinExec =>
       true
-    case p: ColumnarHashAggregateExec =>
+    case p: HashAggregateExecTransformer =>
       if (count >= 1) true
       else plan.children.map(existsJoins(_, count + 1)).exists(_ == true)
-    case p: ColumnarConditionProjectExec
+    case p: ConditionProjectExecTransformer
         if (containsSubquery(p.condition) || containsSubquery(p.projectList)) =>
       false
-    case p: ColumnarTransformSupport if p.supportColumnarTransform =>
+    case p: TransformSupport if p.supportTransform =>
       plan.children.map(existsJoins(_, count)).exists(_ == true)
     case _ =>
       false
@@ -175,7 +175,7 @@ case class ColumnarCollapseCodegenStages(
   }
 
   private def joinOptimization(
-      plan: ColumnarConditionProjectExec,
+      plan: ConditionProjectExecTransformer,
       skip_smj: Boolean = false): SparkPlan = plan.child match {
     case p: ColumnarBroadcastHashJoinExec
         if plan.condition == null && !containsExpression(plan.projectList) =>
@@ -221,12 +221,12 @@ case class ColumnarCollapseCodegenStages(
     plan match {
       case p if !supportCodegen(p) =>
         new ColumnarInputAdapter(insertWholeStageTransformer(p))
-      case p: ColumnarConditionProjectExec
+      case p: ConditionProjectExecTransformer
           if (containsSubquery(p.condition) || containsSubquery(p.projectList)) =>
         new ColumnarInputAdapter(p.withNewChildren(p.children.map(insertWholeStageTransformer)))
       case j: ColumnarSortMergeJoinExec
           if j.buildPlan.isInstanceOf[ColumnarSortMergeJoinExec] || (j.buildPlan
-            .isInstanceOf[ColumnarConditionProjectExec] && j.buildPlan
+            .isInstanceOf[ConditionProjectExecTransformer] && j.buildPlan
             .children(0)
             .isInstanceOf[ColumnarSortMergeJoinExec]) =>
         // we don't support any ColumnarSortMergeJoin whose both children are ColumnarSortMergeJoin
@@ -237,16 +237,16 @@ case class ColumnarCollapseCodegenStages(
             insertInputAdapter(c)
           }
         }))
-      case j: ColumnarHashAggregateExec =>
+      case j: HashAggregateExecTransformer =>
         new ColumnarInputAdapter(insertWholeStageTransformer(j))
       case j: ColumnarSortExec =>
         j.withNewChildren(
           j.children.map(child => new ColumnarInputAdapter(insertWholeStageTransformer(child))))
       case p =>
         p match {
-          case exec: ColumnarConditionProjectExec =>
+          case exec: ConditionProjectExecTransformer =>
             val after_opt = joinOptimization(exec)
-            if (after_opt.isInstanceOf[ColumnarConditionProjectExec]) {
+            if (after_opt.isInstanceOf[ConditionProjectExecTransformer]) {
               after_opt.withNewChildren(after_opt.children.map(c => {
                 if (c.isInstanceOf[ColumnarSortExec]) {
                   new ColumnarInputAdapter(insertWholeStageTransformer(c))
@@ -319,9 +319,9 @@ case class ColumnarCollapseCodegenStages(
 
   private def insertWholeStageTransformer(plan: SparkPlan): SparkPlan = {
     plan match {
-      case a: ColumnarHashAggregateExec =>
-        if (a.child.isInstanceOf[ColumnarConditionProjectExec]) {
-          ColumnarWholeStageTransformerExec(
+      case a: HashAggregateExecTransformer =>
+        if (a.child.isInstanceOf[ConditionProjectExecTransformer]) {
+          WholeStageTransformer(
             a.withNewChildren(a.children.map(insertInputAdapter)))(
             codegenStageCounter.incrementAndGet())
         } else {

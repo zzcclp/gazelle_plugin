@@ -84,13 +84,13 @@ case class ColumnarGuardRule() extends Rule[SparkPlan] {
           }
         case plan: ProjectExec =>
           if (!enableColumnarProjFilter) return false
-          new ColumnarConditionProjectExec(null, plan.projectList, plan.child)
+          new ConditionProjectExecTransformer(null, plan.projectList, plan.child)
         case plan: FilterExec =>
           if (!enableColumnarProjFilter) return false
-          new ColumnarConditionProjectExec(plan.condition, null, plan.child)
+          new ConditionProjectExecTransformer(plan.condition, null, plan.child)
         case plan: HashAggregateExec =>
           if (!enableColumnarHashAgg) return false
-          new ColumnarHashAggregateExec(
+          new HashAggregateExecTransformer(
             plan.requiredChildDistributionExpressions,
             plan.groupingExpressions,
             plan.aggregateExpressions,

@@ -79,23 +79,23 @@ case class ColumnarPreOverrides() extends Rule[SparkPlan] {
       val columnarChild = replaceWithColumnarPlan(plan.child)
       logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
       columnarChild match {
-        case ch: ColumnarConditionProjectExec =>
+        case ch: ConditionProjectExecTransformer =>
           if (ch.projectList == null) {
-            ColumnarConditionProjectExec(ch.condition, plan.projectList, ch.child)
+            ConditionProjectExecTransformer(ch.condition, plan.projectList, ch.child)
           } else {
-            ColumnarConditionProjectExec(null, plan.projectList, columnarChild)
+            ConditionProjectExecTransformer(null, plan.projectList, columnarChild)
           }
         case _ =>
-          ColumnarConditionProjectExec(null, plan.projectList, columnarChild)
+          ConditionProjectExecTransformer(null, plan.projectList, columnarChild)
       }
     case plan: FilterExec =>
       val child = replaceWithColumnarPlan(plan.child)
       logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
-      ColumnarConditionProjectExec(plan.condition, null, child)
+      ConditionProjectExecTransformer(plan.condition, null, child)
     case plan: HashAggregateExec =>
       val child = replaceWithColumnarPlan(plan.child)
       logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
-      ColumnarHashAggregateExec(
+      HashAggregateExecTransformer(
         plan.requiredChildDistributionExpressions,
         plan.groupingExpressions,
         plan.aggregateExpressions,

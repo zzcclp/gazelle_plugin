@@ -68,7 +68,7 @@ case class ColumnarShuffledHashJoinExec(
     right: SparkPlan,
     projectList: Seq[NamedExpression] = null)
     extends BaseJoinExec
-    with ColumnarTransformSupport
+    with TransformSupport
     with ShuffledJoin {
 
   val sparkConf = sparkContext.getConf
@@ -199,14 +199,14 @@ case class ColumnarShuffledHashJoinExec(
   override def supportsColumnar = true
 
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = streamedPlan match {
-    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
+    case c: TransformSupport if c.supportTransform =>
       c.inputRDDs
     case _ =>
       Seq(streamedPlan.executeColumnar())
   }
 
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = streamedPlan match {
-    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
+    case c: TransformSupport if c.supportTransform =>
       val childPlans = c.getBuildPlans
       childPlans :+ (this, null)
     case _ =>
@@ -214,7 +214,7 @@ case class ColumnarShuffledHashJoinExec(
   }
 
   override def getStreamedLeafPlan: SparkPlan = streamedPlan match {
-    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
+    case c: TransformSupport if c.supportTransform =>
       c.getStreamedLeafPlan
     case _ =>
       this
@@ -222,16 +222,16 @@ case class ColumnarShuffledHashJoinExec(
 
   override def getChild: SparkPlan = streamedPlan
 
-  override def dependentPlanCtx: ColumnarTransformContext = {
+  override def dependentPlanCtx: TransformContext = {
     val inputSchema = ConverterUtils.toArrowSchema(buildPlan.output)
-    ColumnarTransformContext(
+    TransformContext(
       inputSchema,
       null,
       ColumnarConditionedProbeJoin
         .prepareHashBuildFunction(buildKeyExprs, buildPlan.output, builder_type))
   }
 
-  override def supportColumnarTransform: Boolean = false
+  override def supportTransform: Boolean = false
 
   val output_skip_alias =
     if (projectList == null || projectList.isEmpty) super.output
@@ -256,9 +256,9 @@ case class ColumnarShuffledHashJoinExec(
       _type)
   }
 
-  override def doTransform: ColumnarTransformContext = {
+  override def doTransform: TransformContext = {
     val childCtx = streamedPlan match {
-      case c: ColumnarTransformSupport if c.supportColumnarTransform =>
+      case c: TransformSupport if c.supportTransform =>
         c.doTransform
       case _ =>
         null
@@ -279,7 +279,7 @@ case class ColumnarShuffledHashJoinExec(
           new ArrowType.Int(32, true)),
         ConverterUtils.toArrowSchema(streamedPlan.output))
     }
-    ColumnarTransformContext(inputSchema, outputSchema, codeGenNode)
+    TransformContext(inputSchema, outputSchema, codeGenNode)
   }
 
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
@@ -393,7 +393,7 @@ case class ColumnarShuffledHashJoinExec(
     ArrowUtils.fromAttributes(attributes)
   }
 
-  def doTransformForStandalone: ColumnarTransformContext = {
+  def doTransformForStandalone: TransformContext = {
     val outputSchema = ConverterUtils.toArrowSchema(output)
     val (codeGenNode, inputSchema) = (
       TreeBuilder.makeFunction(
@@ -401,7 +401,7 @@ case class ColumnarShuffledHashJoinExec(
         Lists.newArrayList(getKernelFunction(1)),
         new ArrowType.Int(32, true)),
       ConverterUtils.toArrowSchema(streamedPlan.output))
-    ColumnarTransformContext(inputSchema, outputSchema, codeGenNode)
+    TransformContext(inputSchema, outputSchema, codeGenNode)
   }
 
   def uploadAndListJars(signature: String): Seq[String] =
@@ -419,8 +419,8 @@ case class ColumnarShuffledHashJoinExec(
       Seq()
     }
 
-  def getCodeGenCtx: ColumnarTransformContext = {
-    var resCtx: ColumnarTransformContext = null
+  def getCodeGenCtx: TransformContext = {
+    var resCtx: TransformContext = null
     try {
       // If this BHJ contains condition, currently we only support doing codegen through WSCG
       val childCtx = doTransformForStandalone
@@ -429,7 +429,7 @@ case class ColumnarShuffledHashJoinExec(
         Lists.newArrayList(childCtx.root),
         new ArrowType.Int(32, true))
       resCtx =
-        ColumnarTransformContext(childCtx.inputSchema, childCtx.outputSchema, wholeStageCodeGenNode)
+        TransformContext(childCtx.inputSchema, childCtx.outputSchema, wholeStageCodeGenNode)
     } catch {
       case e: UnsupportedOperationException
           if e.getMessage == "Unsupport to generate native expression from replaceable expression." =>

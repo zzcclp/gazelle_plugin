@@ -41,14 +41,19 @@ import org.apache.spark.util.{ExecutorManager, UserAddedJarUtils}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
-case class ColumnarTransformContext(inputSchema: Schema, outputSchema: Schema, root: TreeNode) {}
+case class TransformContext(inputSchema: Schema, outputSchema: Schema, root: TreeNode) {}
 
-trait ColumnarTransformSupport extends SparkPlan {
+trait TransformSupport extends SparkPlan {
 
   /**
-   * Whether this SparkPlan supports whole stage codegen or not.
+   * Whether this SparkPlan supports to be transformed into substrait node.
    */
-  def supportColumnarTransform: Boolean = false
+  def supportTransform: Boolean = false
+
+  /**
+   * Validate whether this SparkPlan supports to be transformed into substrait node in Native Code.
+   */
+  def doValidate: Boolean = false
 
   /**
    * Returns all the RDDs of ColumnarBatch which generates the input rows.
@@ -63,17 +68,17 @@ trait ColumnarTransformSupport extends SparkPlan {
 
   def getChild: SparkPlan
 
-  def doTransform: ColumnarTransformContext
+  def doTransform: TransformContext
 
-  def dependentPlanCtx: ColumnarTransformContext = null
+  def dependentPlanCtx: TransformContext = null
 
   def updateMetrics(out_num_rows: Long, process_time: Long): Unit = {}
 
 }
 
-case class ColumnarWholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int)
+case class WholeStageTransformer(child: SparkPlan)(val transformStageId: Int)
     extends UnaryExecNode
-    with ColumnarTransformSupport {
+    with TransformSupport {
 
   val sparkConf = sparkContext.getConf
   val numaBindingInfo = GazellePluginConfig.getConf.numaBindingInfo
@@ -93,7 +98,7 @@ case class ColumnarWholeStageTransformerExec(child: SparkPlan)(val transformStag
 
   // This is not strictly needed because the codegen transformation happens after the columnar
   // transformation but just for consistency
-  override def supportColumnarTransform: Boolean = true
+  override def supportTransform: Boolean = true
 
   override def supportsColumnar: Boolean = true
 
@@ -135,8 +140,8 @@ case class ColumnarWholeStageTransformerExec(child: SparkPlan)(val transformStag
       Seq()
     }
 
-  override def doTransform: ColumnarTransformContext = {
-    val childCtx = child.asInstanceOf[ColumnarTransformSupport].doTransform
+  override def doTransform: TransformContext = {
+    val childCtx = child.asInstanceOf[TransformSupport].doTransform
     if (childCtx == null) {
       throw new NullPointerException(s"ColumnarWholestageTransformer can't doTansform on ${child}")
     }
@@ -144,15 +149,15 @@ case class ColumnarWholeStageTransformerExec(child: SparkPlan)(val transformStag
       s"wholestagetransform",
       Lists.newArrayList(childCtx.root),
       new ArrowType.Int(32, true))
-    ColumnarTransformContext(childCtx.inputSchema, childCtx.outputSchema, wholeStageCodeGenNode)
+    TransformContext(childCtx.inputSchema, childCtx.outputSchema, wholeStageCodeGenNode)
   }
 
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = {
-    child.asInstanceOf[ColumnarTransformSupport].getBuildPlans
+    child.asInstanceOf[TransformSupport].getBuildPlans
   }
 
   override def getStreamedLeafPlan: SparkPlan = {
-    child.asInstanceOf[ColumnarTransformSupport].getStreamedLeafPlan
+    child.asInstanceOf[TransformSupport].getStreamedLeafPlan
   }
 
   override def getChild: SparkPlan = child
@@ -167,23 +172,23 @@ case class ColumnarWholeStageTransformerExec(child: SparkPlan)(val transformStag
       var curChild = child
       var idx = metrics.output_length_list.length - 1
       var child_process_time: Long = 0
-      while (idx >= 0 && curChild.isInstanceOf[ColumnarTransformSupport]) {
-        if (curChild.isInstanceOf[ColumnarConditionProjectExec]) {
+      while (idx >= 0 && curChild.isInstanceOf[TransformSupport]) {
+        if (curChild.isInstanceOf[ConditionProjectExecTransformer]) {
           // see if this condition projector did filter, if so, we need to skip metrics
-          val condProj = curChild.asInstanceOf[ColumnarConditionProjectExec]
+          val condProj = curChild.asInstanceOf[ConditionProjectExecTransformer]
           if (condProj.condition != null &&
               (condProj.projectList != null && condProj.projectList.nonEmpty)) {
             idx -= 1
           }
         }
         curChild
-          .asInstanceOf[ColumnarTransformSupport]
+          .asInstanceOf[TransformSupport]
           .updateMetrics(
             metrics.output_length_list(idx),
             metrics.process_time_list(idx) - child_process_time)
         child_process_time = metrics.process_time_list(idx)
         idx -= 1
-        curChild = curChild.asInstanceOf[ColumnarTransformSupport].getChild
+        curChild = curChild.asInstanceOf[TransformSupport].getChild
       }
       metricsUpdated = true
     } catch {
@@ -249,7 +254,7 @@ case class ColumnarWholeStageTransformerExec(child: SparkPlan)(val transformStag
    * Return built cpp library's signature
    */
   def doBuild(): String = {
-    var resCtx: ColumnarTransformContext = null
+    var resCtx: TransformContext = null
     try {
       // call native wholestagecodegen build
       resCtx = doTransform
@@ -279,7 +284,7 @@ case class ColumnarWholeStageTransformerExec(child: SparkPlan)(val transformStag
   }
 
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
-    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
+    case c: TransformSupport if c.supportTransform =>
       c.inputRDDs
     case _ =>
       throw new UnsupportedOperationException
@@ -299,7 +304,7 @@ case class ColumnarWholeStageTransformerExec(child: SparkPlan)(val transformStag
     // we should zip all dependent RDDs to current main RDD
     val buildPlans = getBuildPlans
     val streamedSortPlan = getStreamedLeafPlan
-    val contains_aggregate = child.isInstanceOf[ColumnarHashAggregateExec]
+    val contains_aggregate = child.isInstanceOf[HashAggregateExecTransformer]
     val dependentKernels: ListBuffer[ExpressionEvaluator] = ListBuffer()
     val dependentKernelIterators: ListBuffer[BatchIterator] = ListBuffer()
     val buildRelationBatchHolder: ListBuffer[ColumnarBatch] = ListBuffer()
@@ -331,7 +336,7 @@ case class ColumnarWholeStageTransformerExec(child: SparkPlan)(val transformStag
             serializableObjectHolder += hashRelationObject
             val depIter =
               new CloseableColumnBatchIterator(relation.getColumnarBatchAsIter)
-            val ctx = curPlan.asInstanceOf[ColumnarTransformSupport].dependentPlanCtx
+            val ctx = curPlan.asInstanceOf[TransformSupport].dependentPlanCtx
             val expression =
               TreeBuilder.makeExpression(
                 ctx.root,
@@ -364,7 +369,7 @@ case class ColumnarWholeStageTransformerExec(child: SparkPlan)(val transformStag
           val buildPlan = p.getBuildPlan
           curRDD.zipPartitions(buildPlan.executeColumnar()) { (iter, depIter) =>
             ExecutorManager.tryTaskSet(numaBindingInfo)
-            val ctx = curPlan.asInstanceOf[ColumnarTransformSupport].dependentPlanCtx
+            val ctx = curPlan.asInstanceOf[TransformSupport].dependentPlanCtx
             val expression =
               TreeBuilder.makeExpression(
                 ctx.root,
@@ -546,7 +551,7 @@ case class ColumnarWholeStageTransformerExec(child: SparkPlan)(val transformStag
             }
           }
 
-        case c: ColumnarConditionProjectExec =>
+        case c: ConditionProjectExecTransformer =>
           new Iterator[ColumnarBatch] {
             override def hasNext: Boolean = {
               val res = nativeIterator.hasNext

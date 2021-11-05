@@ -38,18 +38,15 @@ import com.google.common.collect.Lists
 import com.intel.oap.GazellePluginConfig
 import org.apache.spark.sql.execution.datasources.v2.arrow.SparkMemoryUtils;
 
-case class ColumnarConditionProjectExec(
+case class ConditionProjectExecTransformer(
     condition: Expression,
     projectList: Seq[NamedExpression],
     child: SparkPlan)
     extends UnaryExecNode
-    with ColumnarTransformSupport
+    with TransformSupport
     with PredicateHelper
     with AliasAwareOutputPartitioning
     with Logging {
-
-  val numaBindingInfo = GazellePluginConfig.getConf.numaBindingInfo
-
   val sparkConf: SparkConf = sparkContext.getConf
 
   override def supportsColumnar = true
@@ -60,43 +57,8 @@ case class ColumnarConditionProjectExec(
     "numInputBatches" -> SQLMetrics.createMetric(sparkContext, "input_batches"),
     "processTime" -> SQLMetrics.createTimingMetric(sparkContext, "totaltime_condproject"))
 
-  buildCheck(condition, projectList, child.output)
-
-  def buildCheck(condExpr: Expression, projectList: Seq[Expression],
-                 originalInputAttributes: Seq[Attribute]): Unit = {
-    // check datatype
-    originalInputAttributes.toList.foreach(attr => {
-      try {
-        ConverterUtils.checkIfTypeSupported(attr.dataType)
-      } catch {
-        case e : UnsupportedOperationException =>
-          throw new UnsupportedOperationException(
-            s"${attr.dataType} is not supported in ColumnarConditionProjector.")
-      }
-    })
-    // check expr
-    if (condExpr != null) {
-      try {
-        ConverterUtils.checkIfTypeSupported(condExpr.dataType)
-      } catch {
-        case e : UnsupportedOperationException =>
-          throw new UnsupportedOperationException(
-            s"${condExpr.dataType} is not supported in ColumnarConditionProjector.")
-      }
-      ColumnarExpressionConverter.replaceWithColumnarExpression(condExpr)
-    }
-    if (projectList != null) {
-      for (expr <- projectList) {
-        try {
-          ConverterUtils.checkIfTypeSupported(expr.dataType)
-        } catch {
-          case e : UnsupportedOperationException =>
-            throw new UnsupportedOperationException(
-              s"${expr.dataType} is not supported in ColumnarConditionProjector.")
-        }
-        ColumnarExpressionConverter.replaceWithColumnarExpression(expr)
-      }
-    }
+  override def doValidate: Boolean = {
+    true
   }
 
   def isNullIntolerant(expr: Expression): Boolean = expr match {
@@ -134,21 +96,21 @@ case class ColumnarConditionProjectExec(
     }
 
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
-    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
+    case c: TransformSupport if c.supportTransform =>
       c.inputRDDs
     case _ =>
       Seq(child.executeColumnar())
   }
 
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = child match {
-    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
+    case c: TransformSupport if c.supportTransform =>
       c.getBuildPlans
     case _ =>
       Seq()
   }
 
   override def getStreamedLeafPlan: SparkPlan = child match {
-    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
+    case c: TransformSupport if c.supportTransform =>
       c.getStreamedLeafPlan
     case _ =>
       this
@@ -163,57 +125,9 @@ case class ColumnarConditionProjectExec(
 
   override def getChild: SparkPlan = child
 
-  override def supportColumnarTransform: Boolean = true
+  override def supportTransform: Boolean = true
 
   // override def canEqual(that: Any): Boolean = false
-
-  def getKernelFunction(childTreeNode: TreeNode): TreeNode = {
-    val (filterNode, projectNode) =
-      ColumnarConditionProjector.prepareKernelFunction(condition, projectList, child.output)
-    if (filterNode != null && projectNode != null) {
-      val nestedFilterNode = if (childTreeNode != null) {
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(filterNode, childTreeNode),
-          new ArrowType.Int(32, true))
-      } else {
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(filterNode),
-          new ArrowType.Int(32, true))
-      }
-      TreeBuilder.makeFunction(
-        s"child",
-        Lists.newArrayList(projectNode, nestedFilterNode),
-        new ArrowType.Int(32, true))
-    } else if (filterNode != null) {
-      if (childTreeNode != null) {
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(filterNode, childTreeNode),
-          new ArrowType.Int(32, true))
-      } else {
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(filterNode),
-          new ArrowType.Int(32, true))
-      }
-    } else if (projectNode != null) {
-      if (childTreeNode != null) {
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(projectNode, childTreeNode),
-          new ArrowType.Int(32, true))
-      } else {
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(projectNode),
-          new ArrowType.Int(32, true))
-      }
-    } else {
-      null
-    }
-  }
 
   def getCondProjectKernelFunction(childTreeNode: TreeNode): TreeNode = {
     val (filterNode, projectNode) =
@@ -271,9 +185,9 @@ case class ColumnarConditionProjectExec(
     }
   }
 
-  override def doTransform: ColumnarTransformContext = {
+  override def doTransform: TransformContext = {
     val (childCtx, kernelFunction) = child match {
-      case c: ColumnarTransformSupport if c.supportColumnarTransform =>
+      case c: TransformSupport if c.supportTransform =>
         val ctx = c.doTransform
         (ctx, getCondProjectKernelFunction(ctx.root))
       case _ =>
@@ -288,43 +202,13 @@ case class ColumnarConditionProjectExec(
       ConverterUtils.toArrowSchema(child.output)
     }
     val outputSchema = ConverterUtils.toArrowSchema(output)
-    ColumnarTransformContext(inputSchema, outputSchema, kernelFunction)
+    TransformContext(inputSchema, outputSchema, kernelFunction)
   }
 
   protected override def doExecute()
       : org.apache.spark.rdd.RDD[org.apache.spark.sql.catalyst.InternalRow] = {
     throw new UnsupportedOperationException(s"This operator doesn't support doExecute().")
   }
-
-  ColumnarConditionProjector.prebuild(condition, projectList, child.output)
-
-  override def doExecuteColumnar(): RDD[ColumnarBatch] = {
-    val numOutputRows = longMetric("numOutputRows")
-    val numOutputBatches = longMetric("numOutputBatches")
-    val numInputBatches = longMetric("numInputBatches")
-    val procTime = longMetric("processTime")
-    numOutputRows.set(0)
-    numOutputBatches.set(0)
-    numInputBatches.set(0)
-
-    child.executeColumnar().mapPartitions { iter =>
-      GazellePluginConfig.getConf
-      ExecutorManager.tryTaskSet(numaBindingInfo)
-      val condProj = ColumnarConditionProjector.create(
-        condition,
-        projectList,
-        child.output,
-        numInputBatches,
-        numOutputBatches,
-        numOutputRows,
-        procTime)
-      SparkMemoryUtils.addLeakSafeTaskCompletionListener[Unit]((tc: TaskContext) => {
-        condProj.close()
-      })
-      new CloseableColumnBatchIterator(condProj.createIterator(iter))
-    }
-  }
-
 }
 
 case class ColumnarUnionExec(children: Seq[SparkPlan]) extends SparkPlan {

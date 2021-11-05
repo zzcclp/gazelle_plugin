@@ -57,7 +57,7 @@ case class ColumnarSortExec(
     child: SparkPlan,
     testSpillFrequency: Int = 0)
     extends UnaryExecNode
-    with ColumnarTransformSupport {
+    with TransformSupport {
 
   val sparkConf = sparkContext.getConf
   val numaBindingInfo = GazellePluginConfig.getConf.numaBindingInfo
@@ -120,16 +120,16 @@ case class ColumnarSortExec(
 
   /*****************  WSCG related function ******************/
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
-    case c: ColumnarTransformSupport if c.supportColumnarTransform =>
+    case c: TransformSupport if c.supportTransform =>
       c.inputRDDs
     case _ =>
       Seq(child.executeColumnar())
   }
 
-  override def supportColumnarTransform: Boolean = false
+  override def supportTransform: Boolean = false
 
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = child match {
-    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
+    case c: TransformSupport if c.supportTransform =>
       val childPlans = c.getBuildPlans
       childPlans :+ (this, null)
     case _ =>
@@ -137,7 +137,7 @@ case class ColumnarSortExec(
   }
 
   override def getStreamedLeafPlan: SparkPlan = child match {
-    case c: ColumnarTransformSupport if c.supportColumnarTransform == true =>
+    case c: TransformSupport if c.supportTransform =>
       c.getStreamedLeafPlan
     case _ =>
       this
@@ -152,20 +152,20 @@ case class ColumnarSortExec(
 
   override def getChild: SparkPlan = child
 
-  override def dependentPlanCtx: ColumnarTransformContext = {
+  override def dependentPlanCtx: TransformContext = {
     // Originally, Sort dependent kernel is SortKernel
     // While since we noticed that
     val inputSchema = ConverterUtils.toArrowSchema(child.output)
     val outSchema = ConverterUtils.toArrowSchema(output)
-    ColumnarTransformContext(
+    TransformContext(
       inputSchema,
       outSchema,
       ColumnarSorter.prepareRelationFunction(sortOrder, child.output))
   }
 
-  override def doTransform: ColumnarTransformContext = {
+  override def doTransform: TransformContext = {
     val childCtx = child match {
-      case c: ColumnarTransformSupport if c.supportColumnarTransform =>
+      case c: TransformSupport if c.supportTransform =>
         c.doTransform
       case _ =>
         null
@@ -188,7 +188,7 @@ case class ColumnarSortExec(
           new ArrowType.Int(32, true)),
         childCtx.inputSchema)
     }
-    ColumnarTransformContext(inputSchema, outputSchema, codeGenNode)
+    TransformContext(inputSchema, outputSchema, codeGenNode)
   }
 
   /***********************************************************/
