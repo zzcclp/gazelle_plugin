@@ -15,16 +15,12 @@
  * limitations under the License.
  */
 
-package com.intel.oap.substrait.type;
+package com.intel.oap.substrait.extensions;
 
-public class TypeBuiler {
-    private TypeBuiler() {}
+public class MappingBuilder {
+    private MappingBuilder() {}
 
-    public static TypeNode makeFP64(String name, Boolean nullable) {
-        return new FP64TypeNode(name, nullable);
-    }
-
-    public static TypeNode makeBoolean(String name, Boolean nullable) {
-        return new BooleanTypeNode(name, nullable);
+    public static FunctionMappingNode makeFunctionMapping(String name, Long functionId) {
+        return new FunctionMappingNode(name, functionId);
     }
 }

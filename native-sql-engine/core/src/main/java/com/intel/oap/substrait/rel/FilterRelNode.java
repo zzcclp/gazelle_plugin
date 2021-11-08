@@ -18,32 +18,33 @@
 package com.intel.oap.substrait.rel;
 
 import com.intel.oap.substrait.expression.ExpressionNode;
-import com.intel.oap.substrait.derivation.DerivationExpressionNode;
 import com.intel.oap.substrait.type.TypeNode;
 import io.substrait.*;
 
 import java.util.ArrayList;
 
 public class FilterRelNode implements RelNode {
-//    private final Rel input;
-    private final DerivationExpression derivationCondition;
-//    private final Expression conditon;
-    private final ArrayList<Type> types = new ArrayList<Type>();
+    private final RelNode input;
+    private final ExpressionNode condition;
+    private final ArrayList<TypeNode> types = new ArrayList<>();
 
-    FilterRelNode(DerivationExpression derivationCondition,
-                  ArrayList<Type> types) {
-        this.derivationCondition = derivationCondition;
-//        this.input = null;
-//        this.conditon = null;
+    FilterRelNode(RelNode input,
+                  ExpressionNode condition,
+                  ArrayList<TypeNode> types) {
+        this.input = input;
+        this.condition = condition;
         this.types.addAll(types);
     }
 
     @Override
     public Rel toProtobuf() {
         FilterRel.Builder filterBuilder = FilterRel.newBuilder();
-        filterBuilder.setDerivationCondition(derivationCondition);
-        for (Type type : types) {
-            filterBuilder.addInputTypes(type);
+        if (input != null) {
+            filterBuilder.setInput(input.toProtobuf());
+        }
+        filterBuilder.setCondition(condition.toProtobuf());
+        for (TypeNode type : types) {
+            filterBuilder.addInputTypes(type.toProtobuf());
         }
         Rel.Builder builder = Rel.newBuilder();
         builder.setFilter(filterBuilder.build());

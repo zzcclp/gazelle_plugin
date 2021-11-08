@@ -222,9 +222,9 @@ case class ColumnarShuffledHashJoinExec(
 
   override def getChild: SparkPlan = streamedPlan
 
-  override def dependentPlanCtx: TransformContext = {
+  override def dependentGandivaPlanCtx: TransformGandivaContext = {
     val inputSchema = ConverterUtils.toArrowSchema(buildPlan.output)
-    TransformContext(
+    TransformGandivaContext(
       inputSchema,
       null,
       ColumnarConditionedProbeJoin
@@ -256,31 +256,33 @@ case class ColumnarShuffledHashJoinExec(
       _type)
   }
 
-  override def doTransform: TransformContext = {
-    val childCtx = streamedPlan match {
-      case c: TransformSupport if c.supportTransform =>
-        c.doTransform
-      case _ =>
-        null
-    }
-    val outputSchema = ConverterUtils.toArrowSchema(output)
-    val (codeGenNode, inputSchema) = if (childCtx != null) {
-      (
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(getKernelFunction(1), childCtx.root),
-          new ArrowType.Int(32, true)),
-        childCtx.inputSchema)
-    } else {
-      (
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(getKernelFunction(1)),
-          new ArrowType.Int(32, true)),
-        ConverterUtils.toArrowSchema(streamedPlan.output))
-    }
-    TransformContext(inputSchema, outputSchema, codeGenNode)
-  }
+//  override def doTransform: TransformContext = {
+//    val childCtx = streamedPlan match {
+//      case c: TransformSupport if c.supportTransform =>
+//        c.doTransform
+//      case _ =>
+//        null
+//    }
+//    val outputSchema = ConverterUtils.toArrowSchema(output)
+//    val (codeGenNode, inputSchema) = if (childCtx != null) {
+//      (
+//        TreeBuilder.makeFunction(
+//          s"child",
+//          Lists.newArrayList(getKernelFunction(1), childCtx.root),
+//          new ArrowType.Int(32, true)),
+//        childCtx.inputSchema)
+//    } else {
+//      (
+//        TreeBuilder.makeFunction(
+//          s"child",
+//          Lists.newArrayList(getKernelFunction(1)),
+//          new ArrowType.Int(32, true)),
+//        ConverterUtils.toArrowSchema(streamedPlan.output))
+//    }
+//    TransformContext(inputSchema, outputSchema, codeGenNode)
+//  }
+
+  override def doTransform(args: java.lang.Object): TransformContext = null
 
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
 // we will use previous codegen join to handle joins with condition
@@ -393,7 +395,7 @@ case class ColumnarShuffledHashJoinExec(
     ArrowUtils.fromAttributes(attributes)
   }
 
-  def doTransformForStandalone: TransformContext = {
+  def doTransformForStandalone: TransformGandivaContext = {
     val outputSchema = ConverterUtils.toArrowSchema(output)
     val (codeGenNode, inputSchema) = (
       TreeBuilder.makeFunction(
@@ -401,7 +403,7 @@ case class ColumnarShuffledHashJoinExec(
         Lists.newArrayList(getKernelFunction(1)),
         new ArrowType.Int(32, true)),
       ConverterUtils.toArrowSchema(streamedPlan.output))
-    TransformContext(inputSchema, outputSchema, codeGenNode)
+    TransformGandivaContext(inputSchema, outputSchema, codeGenNode)
   }
 
   def uploadAndListJars(signature: String): Seq[String] =
@@ -419,8 +421,8 @@ case class ColumnarShuffledHashJoinExec(
       Seq()
     }
 
-  def getCodeGenCtx: TransformContext = {
-    var resCtx: TransformContext = null
+  def getCodeGenCtx: TransformGandivaContext = {
+    var resCtx: TransformGandivaContext = null
     try {
       // If this BHJ contains condition, currently we only support doing codegen through WSCG
       val childCtx = doTransformForStandalone
@@ -429,7 +431,7 @@ case class ColumnarShuffledHashJoinExec(
         Lists.newArrayList(childCtx.root),
         new ArrowType.Int(32, true))
       resCtx =
-        TransformContext(childCtx.inputSchema, childCtx.outputSchema, wholeStageCodeGenNode)
+        TransformGandivaContext(childCtx.inputSchema, childCtx.outputSchema, wholeStageCodeGenNode)
     } catch {
       case e: UnsupportedOperationException
           if e.getMessage == "Unsupport to generate native expression from replaceable expression." =>
@@ -497,7 +499,7 @@ case class ColumnarShuffledHashJoinExec(
 
         // received broadcast value contain a hashmap and raw recordBatch
         val beforeEval = System.nanoTime()
-        val ctx = dependentPlanCtx
+        val ctx = dependentGandivaPlanCtx
         val hashRelationKernel = new ExpressionEvaluator()
         val hash_relation_expression = TreeBuilder
           .makeExpression(ctx.root, Field.nullable("result", new ArrowType.Int(32, true)))

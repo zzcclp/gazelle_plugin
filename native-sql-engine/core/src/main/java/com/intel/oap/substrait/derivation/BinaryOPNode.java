@@ -21,10 +21,11 @@ import io.substrait.*;
 
 public class BinaryOPNode implements DerivationExpressionNode {
     private final String op;
-    private final DerivationExpression arg1;
-    private final DerivationExpression arg2;
+    private final DerivationExpressionNode arg1;
+    private final DerivationExpressionNode arg2;
 
-    BinaryOPNode(String op, DerivationExpression arg1, DerivationExpression arg2) {
+    BinaryOPNode(String op, DerivationExpressionNode arg1,
+                 DerivationExpressionNode arg2) {
         this.op = op;
         this.arg1 = arg1;
         this.arg2 = arg2;
@@ -34,23 +35,22 @@ public class BinaryOPNode implements DerivationExpressionNode {
     public DerivationExpression toProtobuf() {
         DerivationExpression.BinaryOp.Builder binaryBuilder =
                 DerivationExpression.BinaryOp.newBuilder();
-        switch(op){
-            case "multiply" :
+        switch(op) {
+            case "multiply":
                 binaryBuilder.setOpType(
                         DerivationExpression.BinaryOp.OpType.MULTIPLY);
                 break;
-            case "divide" :
+            case "divide":
                 binaryBuilder.setOpType(
                         DerivationExpression.BinaryOp.OpType.DIVIDE);
                 break;
-            default :
+            default:
                 System.out.println("Not supported.");
         }
-        binaryBuilder.setArg1(arg1);
-        binaryBuilder.setArg2(arg2);
+        binaryBuilder.setArg1(arg1.toProtobuf());
+        binaryBuilder.setArg2(arg2.toProtobuf());
 
-        DerivationExpression.Builder builder =
-                DerivationExpression.newBuilder();
+        DerivationExpression.Builder builder = DerivationExpression.newBuilder();
         builder.setBinaryOp(binaryBuilder.build());
         return builder.build();
     }

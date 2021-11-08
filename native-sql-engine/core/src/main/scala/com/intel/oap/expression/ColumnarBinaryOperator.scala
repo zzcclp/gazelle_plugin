@@ -19,6 +19,9 @@ package com.intel.oap.expression
 
 import com.google.common.collect.Lists
 import com.intel.oap.GazellePluginConfig
+import com.intel.oap.substrait.derivation.{DerivationExpressionBuilder, DerivationExpressionNode}
+import com.intel.oap.substrait.expression.{ExpressionBuilder, ExpressionNode, ScalarFunctionNode}
+import com.intel.oap.substrait.`type`.TypeBuiler
 import org.apache.arrow.gandiva.evaluator._
 import org.apache.arrow.gandiva.exceptions.GandivaException
 import org.apache.arrow.gandiva.expression._
@@ -35,19 +38,34 @@ import scala.collection.mutable.ListBuffer
 /**
  * A version of add that supports columnar processing for longs.
  */
-class ColumnarAnd(left: Expression, right: Expression, original: Expression)
+class AndTransformer(left: Expression, right: Expression, original: Expression)
     extends And(left: Expression, right: Expression)
-    with ColumnarExpression
+    with ExpressionTransformer
     with Logging {
-  override def doColumnarCodeGen(args: java.lang.Object): (TreeNode, ArrowType) = {
-    val (left_node, left_type): (TreeNode, ArrowType) =
-      left.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
-    val (right_node, right_type): (TreeNode, ArrowType) =
-      right.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
+  override def doTransform(args: java.lang.Object): ExpressionNode = {
+    val left_node =
+      left.asInstanceOf[ExpressionTransformer].doTransform(args)
+    val right_node =
+      right.asInstanceOf[ExpressionTransformer].doTransform(args)
+    if (!left_node.isInstanceOf[ExpressionNode] ||
+        !right_node.isInstanceOf[ExpressionNode]) {
+      throw new UnsupportedOperationException(s"not supported yet.")
+    }
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
+    val functionName = "AND"
+    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
+    if (!functionMap.containsKey(functionName)) {
+      functionMap.put(functionName, functionId)
+    } else {
+      functionId = functionMap.get(functionName)
+    }
 
-    val resultType = new ArrowType.Bool()
-    val funcNode = TreeBuilder.makeAnd(Lists.newArrayList(left_node, right_node))
-    (funcNode, resultType)
+    val expressNodes = new java.util.ArrayList[ExpressionNode]()
+    expressNodes.add(left_node.asInstanceOf[ExpressionNode])
+    expressNodes.add(right_node.asInstanceOf[ExpressionNode])
+    val typeNode = TypeBuiler.makeBoolean("res", true)
+
+    ExpressionBuilder.makeScalarFunction(functionId, expressNodes, typeNode)
   }
 }
 
@@ -247,177 +265,127 @@ class ColumnarEqualNull(left: Expression, right: Expression, original: Expressio
   }
 }
 
-class ColumnarLessThan(left: Expression, right: Expression, original: Expression)
+class LessThanTransformer(left: Expression, right: Expression, original: Expression)
     extends LessThan(left: Expression, right: Expression)
-    with ColumnarExpression
+    with ExpressionTransformer
     with Logging {
-  override def doColumnarCodeGen(args: java.lang.Object): (TreeNode, ArrowType) = {
-    var (left_node, left_type): (TreeNode, ArrowType) =
-      left.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
-    var (right_node, right_type): (TreeNode, ArrowType) =
-      right.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
-
-    val unifiedType = CodeGeneration.getResultType(left_type, right_type)
-    (left_type, right_type) match {
-      case (l: ArrowType.Decimal, r: ArrowType.Decimal) =>
-      case _ =>
-        if (!left_type.equals(unifiedType)) {
-          val func_name = CodeGeneration.getCastFuncName(unifiedType)
-          left_node =
-            TreeBuilder.makeFunction(func_name, Lists.newArrayList(left_node), unifiedType)
-        }
-        if (!right_type.equals(unifiedType)) {
-          val func_name = CodeGeneration.getCastFuncName(unifiedType)
-          right_node =
-            TreeBuilder.makeFunction(func_name, Lists.newArrayList(right_node), unifiedType)
-        }
+  override def doTransform(args: java.lang.Object): ExpressionNode = {
+    val left_node =
+      left.asInstanceOf[ExpressionTransformer].doTransform(args)
+    val right_node =
+      right.asInstanceOf[ExpressionTransformer].doTransform(args)
+    if (!left_node.isInstanceOf[ExpressionNode] ||
+        !right_node.isInstanceOf[ExpressionNode]) {
+      throw new UnsupportedOperationException(s"not supported yet.")
+    }
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
+    val functionName = "LESS_THAN"
+    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
+    if (!functionMap.containsKey(functionName)) {
+      functionMap.put(functionName, functionId)
+    } else {
+      functionId = functionMap.get(functionName)
     }
 
-    var function = "less_than"
-    val nanCheck = GazellePluginConfig.getConf.enableColumnarNaNCheck
-    if (nanCheck) {
-      unifiedType match {
-        case t: ArrowType.FloatingPoint =>
-          function = "less_than_with_nan"
-        case _ =>
-      }
-    }
-    val resultType = new ArrowType.Bool()
-    val funcNode =
-      TreeBuilder.makeFunction(function, Lists.newArrayList(left_node, right_node), resultType)
-    (funcNode, resultType)
+    val expressNodes = Lists.newArrayList(
+      left_node.asInstanceOf[ExpressionNode],
+      right_node.asInstanceOf[ExpressionNode])
+    val typeNode = TypeBuiler.makeBoolean("res", true)
+
+    ExpressionBuilder.makeScalarFunction(functionId, expressNodes, typeNode)
   }
 }
 
-class ColumnarLessThanOrEqual(left: Expression, right: Expression, original: Expression)
+class LessThanOrEqualTransformer(left: Expression, right: Expression, original: Expression)
     extends LessThanOrEqual(left: Expression, right: Expression)
-    with ColumnarExpression
+    with ExpressionTransformer
     with Logging {
-  override def doColumnarCodeGen(args: java.lang.Object): (TreeNode, ArrowType) = {
-    var (left_node, left_type): (TreeNode, ArrowType) =
-      left.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
-    var (right_node, right_type): (TreeNode, ArrowType) =
-      right.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
-
-    val unifiedType = CodeGeneration.getResultType(left_type, right_type)
-    (left_type, right_type) match {
-      case (l: ArrowType.Decimal, r: ArrowType.Decimal) =>
-      case _ =>
-        if (!left_type.equals(unifiedType)) {
-          val func_name = CodeGeneration.getCastFuncName(unifiedType)
-          left_node =
-            TreeBuilder.makeFunction(func_name, Lists.newArrayList(left_node), unifiedType)
-        }
-        if (!right_type.equals(unifiedType)) {
-          val func_name = CodeGeneration.getCastFuncName(unifiedType)
-          right_node =
-            TreeBuilder.makeFunction(func_name, Lists.newArrayList(right_node), unifiedType)
-        }
+  override def doTransform(args: java.lang.Object): ExpressionNode = {
+    val left_node =
+      left.asInstanceOf[ExpressionTransformer].doTransform(args)
+    val right_node =
+      right.asInstanceOf[ExpressionTransformer].doTransform(args)
+    if (!left_node.isInstanceOf[ExpressionNode] ||
+        !right_node.isInstanceOf[ExpressionNode]) {
+      throw new UnsupportedOperationException(s"not supported yet.")
+    }
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
+    val functionName = "LESS_THAN_OR_EQUAL"
+    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
+    if (!functionMap.containsKey(functionName)) {
+      functionMap.put(functionName, functionId)
+    } else {
+      functionId = functionMap.get(functionName)
     }
 
-    var function = "less_than_or_equal_to"
-    val nanCheck = GazellePluginConfig.getConf.enableColumnarNaNCheck
-    if (nanCheck) {
-      unifiedType match {
-        case t: ArrowType.FloatingPoint =>
-          function = "less_than_or_equal_to_with_nan"
-        case _ =>
-      }
-    }
-    val resultType = new ArrowType.Bool()
-    val funcNode = TreeBuilder.makeFunction(
-      function,
-      Lists.newArrayList(left_node, right_node),
-      resultType)
-    (funcNode, resultType)
+    val expressNodes = Lists.newArrayList(
+      left_node.asInstanceOf[ExpressionNode],
+      right_node.asInstanceOf[ExpressionNode])
+    val typeNode = TypeBuiler.makeBoolean("res", true)
+
+    ExpressionBuilder.makeScalarFunction(functionId, expressNodes, typeNode)
   }
 }
 
-class ColumnarGreaterThan(left: Expression, right: Expression, original: Expression)
+class GreaterThanTransformer(left: Expression, right: Expression, original: Expression)
     extends GreaterThan(left: Expression, right: Expression)
-    with ColumnarExpression
+    with ExpressionTransformer
     with Logging {
-  override def doColumnarCodeGen(args: java.lang.Object): (TreeNode, ArrowType) = {
-    var (left_node, left_type): (TreeNode, ArrowType) =
-      left.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
-    var (right_node, right_type): (TreeNode, ArrowType) =
-      right.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
-
-    val unifiedType = CodeGeneration.getResultType(left_type, right_type)
-    (left_type, right_type) match {
-      case (l: ArrowType.Decimal, r: ArrowType.Decimal) =>
-      case _ =>
-        if (!left_type.equals(unifiedType)) {
-          val func_name = CodeGeneration.getCastFuncName(unifiedType)
-          left_node =
-            TreeBuilder.makeFunction(func_name, Lists.newArrayList(left_node), unifiedType)
-        }
-        if (!right_type.equals(unifiedType)) {
-          val func_name = CodeGeneration.getCastFuncName(unifiedType)
-          right_node =
-            TreeBuilder.makeFunction(func_name, Lists.newArrayList(right_node), unifiedType)
-        }
+  override def doTransform(args: java.lang.Object): ExpressionNode = {
+    val left_node =
+      left.asInstanceOf[ExpressionTransformer].doTransform(args)
+    val right_node =
+      right.asInstanceOf[ExpressionTransformer].doTransform(args)
+    if (!left_node.isInstanceOf[ExpressionNode] ||
+      !right_node.isInstanceOf[ExpressionNode]) {
+      throw new UnsupportedOperationException(s"not supported yet.")
+    }
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
+    val functionName = "GREATER_THAN"
+    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
+    if (!functionMap.containsKey(functionName)) {
+      functionMap.put(functionName, functionId)
+    } else {
+      functionId = functionMap.get(functionName)
     }
 
-    var function = "greater_than"
-    val nanCheck = GazellePluginConfig.getConf.enableColumnarNaNCheck
-    if (nanCheck) {
-      unifiedType match {
-        case t: ArrowType.FloatingPoint =>
-          function = "greater_than_with_nan"
-        case _ =>
-      }
-    }
-    val resultType = new ArrowType.Bool()
-    val funcNode = TreeBuilder.makeFunction(
-      function,
-      Lists.newArrayList(left_node, right_node),
-      resultType)
-    (funcNode, resultType)
+    val expressNodes = Lists.newArrayList(
+      left_node.asInstanceOf[ExpressionNode],
+      right_node.asInstanceOf[ExpressionNode])
+    val typeNode = TypeBuiler.makeBoolean("res", true)
+
+    ExpressionBuilder.makeScalarFunction(functionId, expressNodes, typeNode)
   }
 }
 
-class ColumnarGreaterThanOrEqual(left: Expression, right: Expression, original: Expression)
+class GreaterThanOrEqualTransformer(left: Expression, right: Expression, original: Expression)
     extends GreaterThanOrEqual(left: Expression, right: Expression)
-    with ColumnarExpression
+    with ExpressionTransformer
     with Logging {
-  override def doColumnarCodeGen(args: java.lang.Object): (TreeNode, ArrowType) = {
-    var (left_node, left_type): (TreeNode, ArrowType) =
-      left.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
-    var (right_node, right_type): (TreeNode, ArrowType) =
-      right.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
-
-    val unifiedType = CodeGeneration.getResultType(left_type, right_type)
-    (left_type, right_type) match {
-      case (l: ArrowType.Decimal, r: ArrowType.Decimal) =>
-      case _ =>
-        if (!left_type.equals(unifiedType)) {
-          val func_name = CodeGeneration.getCastFuncName(unifiedType)
-          left_node =
-            TreeBuilder.makeFunction(func_name, Lists.newArrayList(left_node), unifiedType)
-        }
-        if (!right_type.equals(unifiedType)) {
-          val func_name = CodeGeneration.getCastFuncName(unifiedType)
-          right_node =
-            TreeBuilder.makeFunction(func_name, Lists.newArrayList(right_node), unifiedType)
-        }
+  override def doTransform(args: java.lang.Object): ExpressionNode = {
+    val left_node =
+      left.asInstanceOf[ExpressionTransformer].doTransform(args)
+    val right_node =
+      right.asInstanceOf[ExpressionTransformer].doTransform(args)
+    if (!left_node.isInstanceOf[ExpressionNode] ||
+      !right_node.isInstanceOf[ExpressionNode]) {
+      throw new UnsupportedOperationException(s"not supported yet.")
+    }
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
+    val functionName = "GREATER_THAN_OR_EQUAL"
+    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
+    if (!functionMap.containsKey(functionName)) {
+      functionMap.put(functionName, functionId)
+    } else {
+      functionId = functionMap.get(functionName)
     }
 
-    var function = "greater_than_or_equal_to"
-    val nanCheck = GazellePluginConfig.getConf.enableColumnarNaNCheck
-    if (nanCheck) {
-      unifiedType match {
-        case t: ArrowType.FloatingPoint =>
-          function = "greater_than_or_equal_to_with_nan"
-        case _ =>
-      }
-    }
-    val resultType = new ArrowType.Bool()
-    val funcNode = TreeBuilder.makeFunction(
-      function,
-      Lists.newArrayList(left_node, right_node),
-      resultType)
-    (funcNode, resultType)
+    val expressNodes = Lists.newArrayList(
+      left_node.asInstanceOf[ExpressionNode],
+      right_node.asInstanceOf[ExpressionNode])
+    val typeNode = TypeBuiler.makeBoolean("res", true)
+
+    ExpressionBuilder.makeScalarFunction(functionId, expressNodes, typeNode)
   }
 }
 
@@ -471,7 +439,7 @@ object ColumnarBinaryOperator {
     buildCheck(left, right)
     original match {
       case a: And =>
-        new ColumnarAnd(left, right, a)
+        new AndTransformer(left, right, a)
       case o: Or =>
         new ColumnarOr(left, right, o)
       case e: EqualTo =>
@@ -479,13 +447,13 @@ object ColumnarBinaryOperator {
       case e: EqualNullSafe =>
         new ColumnarEqualNull(left, right, e)
       case l: LessThan =>
-        new ColumnarLessThan(left, right, l)
+        new LessThanTransformer(left, right, l)
       case l: LessThanOrEqual =>
-        new ColumnarLessThanOrEqual(left, right, l)
+        new LessThanOrEqualTransformer(left, right, l)
       case g: GreaterThan =>
-        new ColumnarGreaterThan(left, right, g)
+        new GreaterThanTransformer(left, right, g)
       case g: GreaterThanOrEqual =>
-        new ColumnarGreaterThanOrEqual(left, right, g)
+        new GreaterThanOrEqualTransformer(left, right, g)
       case e: EndsWith =>
         new ColumnarEndsWith(left, right, e)
       case s: StartsWith =>

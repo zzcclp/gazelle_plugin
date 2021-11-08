@@ -18,45 +18,25 @@
 package com.intel.oap.expression
 
 import com.google.common.collect.Lists
+import com.intel.oap.substrait.expression.{ExpressionBuilder, ExpressionNode}
 import org.apache.arrow.gandiva.evaluator._
 import org.apache.arrow.gandiva.exceptions.GandivaException
 import org.apache.arrow.gandiva.expression._
 import org.apache.arrow.vector.types.pojo.ArrowType
 import org.apache.arrow.vector.types.pojo.Field
-
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
 import scala.collection.mutable.ListBuffer
 
-class ColumnarBoundReference(ordinal: Int, dataType: DataType, nullable: Boolean)
+class BoundReferenceTransformer(ordinal: Int, dataType: DataType, nullable: Boolean)
     extends BoundReference(ordinal, dataType, nullable)
-    with ColumnarExpression
+    with ExpressionTransformer
     with Logging {
 
-  buildCheck()
-
-  def buildCheck(): Unit = {
-    try {
-      dataType match {
-        case at: ArrayType =>
-        case _ =>
-          ConverterUtils.checkIfTypeSupported(dataType)
-      }
-    } catch {
-      case e: UnsupportedOperationException =>
-        throw new UnsupportedOperationException(
-          s"${dataType} is not supported in ColumnarBoundReference.")
-    }
+  override def doTransform(args: java.lang.Object): ExpressionNode = {
+    ExpressionBuilder.makeSelection(ordinal.asInstanceOf[java.lang.Integer])
   }
-  override def doColumnarCodeGen(args: java.lang.Object): (TreeNode, ArrowType) = {
-    val resultType = CodeGeneration.getResultType(dataType)
-    val field = ConverterUtils.createArrowField(s"c_$ordinal", dataType)
-    val fieldTypes = args.asInstanceOf[java.util.List[Field]]
-    fieldTypes.add(field)
-    (TreeBuilder.makeField(field), resultType)
-  }
-
 }

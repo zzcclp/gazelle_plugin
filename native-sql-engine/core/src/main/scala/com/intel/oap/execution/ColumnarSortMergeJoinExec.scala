@@ -290,31 +290,31 @@ case class ColumnarSortMergeJoinExec(
 
   override def getChild: SparkPlan = streamedPlan
 
-  override def doTransform: TransformContext = {
-    val childCtx = streamedPlan match {
-      case c: TransformSupport if c.supportTransform =>
-        c.doTransform
-      case _ =>
-        null
-    }
-    val outputSchema = ConverterUtils.toArrowSchema(output_skip_alias)
-    val (codeGenNode, inputSchema) = if (childCtx != null) {
-      (
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(getKernelFunction, childCtx.root),
-          new ArrowType.Int(32, true)),
-        childCtx.inputSchema)
-    } else {
-      (
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(getKernelFunction),
-          new ArrowType.Int(32, true)),
-        new Schema(Lists.newArrayList()))
-    }
-    TransformContext(inputSchema, outputSchema, codeGenNode)
-  }
+//  override def doTransform: TransformContext = {
+//    val childCtx = streamedPlan match {
+//      case c: TransformSupport if c.supportTransform =>
+//        c.doTransform
+//      case _ =>
+//        null
+//    }
+//    val outputSchema = ConverterUtils.toArrowSchema(output_skip_alias)
+//    val (codeGenNode, inputSchema) = if (childCtx != null) {
+//      (
+//        TreeBuilder.makeFunction(
+//          s"child",
+//          Lists.newArrayList(getKernelFunction, childCtx.root),
+//          new ArrowType.Int(32, true)),
+//        childCtx.inputSchema)
+//    } else {
+//      (
+//        TreeBuilder.makeFunction(
+//          s"child",
+//          Lists.newArrayList(getKernelFunction),
+//          new ArrowType.Int(32, true)),
+//        new Schema(Lists.newArrayList()))
+//    }
+//    TransformContext(inputSchema, outputSchema, codeGenNode)
+//  }
   //do not call prebuild so we could skip the c++ codegen
   //val triggerBuildSignature = getCodeGenSignature
 
@@ -336,6 +336,8 @@ case class ColumnarSortMergeJoinExec(
     case e: Throwable =>
       throw e
   }*/
+
+  override def doTransform(args: java.lang.Object): TransformContext = null
 
   def buildCheck(): Unit = {
     joinType match {

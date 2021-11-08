@@ -37,7 +37,6 @@ import org.apache.arrow.vector.ipc.message.{ArrowFieldNode, ArrowRecordBatch, Ip
 import org.apache.arrow.vector.types.pojo.{ArrowType, Field, FieldType, Schema}
 import org.apache.arrow.gandiva.expression._
 import org.apache.arrow.gandiva.evaluator._
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate._
@@ -46,9 +45,9 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.ArrowUtils
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-
 import io.netty.buffer.{ByteBuf, ByteBufAllocator, ByteBufOutputStream}
 import java.nio.channels.{Channels, WritableByteChannel}
 
@@ -56,11 +55,11 @@ import com.google.common.collect.Lists
 import java.io.{InputStream, OutputStream}
 import java.util.concurrent.TimeUnit.SECONDS
 
+import com.intel.oap.substrait.`type`._
 import org.apache.arrow.vector.types.TimeUnit
 import org.apache.arrow.vector.types.pojo.ArrowType
 import org.apache.arrow.vector.types.pojo.ArrowType.ArrowTypeID
 import org.apache.arrow.vector.types.{DateUnit, FloatingPointPrecision}
-
 import org.apache.spark.sql.catalyst.util.DateTimeConstants
 import org.apache.spark.sql.catalyst.util.DateTimeConstants.MICROS_PER_SECOND
 import org.apache.spark.sql.execution.datasources.v2.arrow.SparkSchemaUtils
@@ -378,7 +377,7 @@ object ConverterUtils extends Logging {
         }
       case d: ColumnarDivide =>
         new AttributeReference(name, DoubleType, d.nullable)()
-      case m: ColumnarMultiply =>
+      case m: MultiplyTransformer =>
         new AttributeReference(name, m.dataType, m.nullable)()
       case other =>
         val a = if (name != "None") {
@@ -393,6 +392,25 @@ object ConverterUtils extends Logging {
           tmpAttr
         }
     }
+  }
+
+  def getTypeNode(datatye: DataType, name: String, nullable: Boolean): TypeNode = {
+    datatye match {
+      case BooleanType =>
+        TypeBuiler.makeBoolean(name, nullable)
+      case DoubleType =>
+        TypeBuiler.makeFP64(name, nullable)
+      case unknown =>
+        throw new UnsupportedOperationException(s"Type $unknown not supported")
+    }
+  }
+
+  def getTypeNodeFromAttributes(attributes: Seq[Attribute]): java.util.ArrayList[TypeNode] = {
+    val typeNodes = new java.util.ArrayList[TypeNode]()
+    for (attr <- attributes) {
+      typeNodes.add(getTypeNode(attr.dataType, attr.name, attr.nullable))
+    }
+    typeNodes
   }
 
   def printBatch(cb: ColumnarBatch): Unit = {

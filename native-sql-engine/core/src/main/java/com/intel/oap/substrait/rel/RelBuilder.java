@@ -17,10 +17,9 @@
 
 package com.intel.oap.substrait.rel;
 
-import com.intel.oap.substrait.derivation.DerivationExpressionNode;
+import com.intel.oap.substrait.expression.AggregateFunctionNode;
 import com.intel.oap.substrait.expression.ExpressionNode;
 import com.intel.oap.substrait.type.TypeNode;
-import io.substrait.*;
 
 import java.util.ArrayList;
 
@@ -30,8 +29,21 @@ import java.util.ArrayList;
 public class RelBuilder {
   private RelBuilder() {}
 
-  public static RelNode makeFilterRel(DerivationExpression derivationCondition,
-                                      ArrayList<Type> types) {
-    return new FilterRelNode(derivationCondition, types);
+  public static RelNode makeFilterRel(RelNode input,
+                                      ExpressionNode condition,
+                                      ArrayList<TypeNode> types) {
+    return new FilterRelNode(input, condition, types);
+  }
+
+  public static RelNode makeProjectRel(RelNode input,
+                                       ArrayList<ExpressionNode> expressionNodes,
+                                       ArrayList<TypeNode> inputTypes) {
+    return new ProjectRelNode(input, expressionNodes, inputTypes);
+  }
+
+  public static RelNode makeAggregateRel(RelNode input,
+                                         ArrayList<Integer> groupings,
+                                         ArrayList<AggregateFunctionNode> aggregateFunctionNodes) {
+    return new AggregateRelNode(input, groupings, aggregateFunctionNodes);
   }
 }

@@ -20,6 +20,7 @@ package com.intel.oap.vectorized;
 import com.intel.oap.GazellePluginConfig;
 import com.intel.oap.execution.ColumnarNativeIterator;
 import com.intel.oap.spark.sql.execution.datasources.v2.arrow.Spiller;
+import com.intel.oap.substrait.plan.PlanNode;
 import org.apache.arrow.dataset.jni.NativeMemoryPool;
 import org.apache.arrow.dataset.jni.UnsafeRecordBatchSerializer;
 import org.apache.arrow.gandiva.evaluator.SelectionVectorInt16;
@@ -135,7 +136,7 @@ public class ExpressionEvaluator implements AutoCloseable {
 
   /** Used by WholeStageTransfrom */
   public BatchIterator createKernelWithIterator(
-          Schema ws_in_schema, List<ExpressionTree> ws_exprs,
+          Schema ws_in_schema, PlanNode ws_plan,
           Schema ws_res_schema,
           List<ExpressionTree> in_exprs, ColumnarNativeIterator batchItr,
           BatchIterator[] dependencies, boolean finishReturn)
@@ -147,7 +148,7 @@ public class ExpressionEvaluator implements AutoCloseable {
     }
     long batchIteratorInstance = jniWrapper.nativeCreateKernelWithIterator(
             memoryPool.getNativeInstanceId(), getSchemaBytesBuf(ws_in_schema),
-            getExprListBytesBuf(ws_exprs), getSchemaBytesBuf(ws_res_schema),
+            getPlanBytesBuf(ws_plan), getSchemaBytesBuf(ws_res_schema),
             getExprListBytesBuf(in_exprs),
             batchItr, instanceIdList, finishReturn);
     return new BatchIterator(batchIteratorInstance);
@@ -300,6 +301,10 @@ public class ExpressionEvaluator implements AutoCloseable {
       builder.addExprs(expr.toProtobuf());
     }
     return builder.build().toByteArray();
+  }
+
+  byte[] getPlanBytesBuf(PlanNode planNode) {
+    return planNode.toProtobuf().toByteArray();
   }
 
   private class NativeSpiller implements Spiller {

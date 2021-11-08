@@ -152,44 +152,46 @@ case class ColumnarSortExec(
 
   override def getChild: SparkPlan = child
 
-  override def dependentPlanCtx: TransformContext = {
+  override def dependentGandivaPlanCtx: TransformGandivaContext = {
     // Originally, Sort dependent kernel is SortKernel
     // While since we noticed that
     val inputSchema = ConverterUtils.toArrowSchema(child.output)
     val outSchema = ConverterUtils.toArrowSchema(output)
-    TransformContext(
+    TransformGandivaContext(
       inputSchema,
       outSchema,
       ColumnarSorter.prepareRelationFunction(sortOrder, child.output))
   }
 
-  override def doTransform: TransformContext = {
-    val childCtx = child match {
-      case c: TransformSupport if c.supportTransform =>
-        c.doTransform
-      case _ =>
-        null
-    }
-    val outputSchema = ConverterUtils.toArrowSchema(output)
-    val sortNode =
-      ColumnarSorter.getKernelFunction(sortOrder, child.output, sparkConf)
-    val (codeGenNode, inputSchema) = if (childCtx != null) {
-      (
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(sortNode, childCtx.root),
-          new ArrowType.Int(32, true)),
-        childCtx.inputSchema)
-    } else {
-      (
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(sortNode),
-          new ArrowType.Int(32, true)),
-        childCtx.inputSchema)
-    }
-    TransformContext(inputSchema, outputSchema, codeGenNode)
-  }
+//  override def doTransform(args: java.util.Objects): TransformContext = {
+//    val childCtx = child match {
+//      case c: TransformSupport if c.supportTransform =>
+//        c.doTransform
+//      case _ =>
+//        null
+//    }
+//    val outputSchema = ConverterUtils.toArrowSchema(output)
+//    val sortNode =
+//      ColumnarSorter.getKernelFunction(sortOrder, child.output, sparkConf)
+//    val (codeGenNode, inputSchema) = if (childCtx != null) {
+//      (
+//        TreeBuilder.makeFunction(
+//          s"child",
+//          Lists.newArrayList(sortNode, childCtx.root),
+//          new ArrowType.Int(32, true)),
+//        childCtx.inputSchema)
+//    } else {
+//      (
+//        TreeBuilder.makeFunction(
+//          s"child",
+//          Lists.newArrayList(sortNode),
+//          new ArrowType.Int(32, true)),
+//        childCtx.inputSchema)
+//    }
+//    TransformContext(inputSchema, outputSchema, codeGenNode)
+//  }
+
+  override def doTransform(args: java.lang.Object): TransformContext = null
 
   /***********************************************************/
   def getCodeGenSignature =

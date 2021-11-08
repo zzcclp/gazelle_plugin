@@ -43,28 +43,23 @@ object ColumnarExpressionConverter extends Logging {
           a.name)(a.exprId, a.qualifier, a.explicitMetadata)
       case a: AttributeReference =>
         logInfo(s"${expr.getClass} ${expr} is supported, no_cal is $check_if_no_calculation.")
-        if (attributeSeq != null) {
-          val bindReference =
-            BindReferences.bindReference(expr, attributeSeq, true)
-          if (bindReference == expr) {
-            if (expIdx == -1) {
-              return new ColumnarAttributeReference(a.name, a.dataType, a.nullable, a.metadata)(
-                a.exprId,
-                a.qualifier)
-            } else {
-              return new ColumnarBoundReference(expIdx, a.dataType, a.nullable)
-            }
-          }
-          val b = bindReference.asInstanceOf[BoundReference]
-          new ColumnarBoundReference(b.ordinal, b.dataType, b.nullable)
+        if (attributeSeq == null) {
+          throw new UnsupportedOperationException(s"attributeSeq should not be null.")
+        }
+        val bindReference =
+          BindReferences.bindReference(expr, attributeSeq, allowFailures = true)
+        if (bindReference == expr) {
+          // bind failure
+          throw new UnsupportedOperationException(s"bind failure")
         } else {
-          return new ColumnarAttributeReference(a.name, a.dataType, a.nullable, a.metadata)(
+          val b = bindReference.asInstanceOf[BoundReference]
+          new AttributeReferenceTransformer(a.name, b.ordinal, a.dataType, a.nullable, a.metadata)(
             a.exprId,
             a.qualifier)
         }
       case lit: Literal =>
         logInfo(s"${expr.getClass} ${expr} is supported, no_cal is $check_if_no_calculation.")
-        new ColumnarLiteral(lit)
+        new LiteralTransformer(lit)
       case binArith: BinaryArithmetic =>
         check_if_no_calculation = false
         logInfo(s"${expr.getClass} ${expr} is supported, no_cal is $check_if_no_calculation.")
@@ -82,11 +77,11 @@ object ColumnarExpressionConverter extends Logging {
         logInfo(s"${expr.getClass} ${expr} is supported, no_cal is $check_if_no_calculation.")
         if (convertBoundRefToAttrRef && attributeSeq != null) {
           val a = attributeSeq(b.ordinal)
-          new ColumnarAttributeReference(a.name, a.dataType, a.nullable, a.metadata)(
+          new AttributeReferenceTransformer(a.name, b.ordinal, a.dataType, a.nullable, a.metadata)(
             a.exprId,
             a.qualifier)
         } else {
-          new ColumnarBoundReference(b.ordinal, b.dataType, b.nullable)
+          new BoundReferenceTransformer(b.ordinal, b.dataType, b.nullable)
         }
       case b: BinaryOperator =>
         check_if_no_calculation = false

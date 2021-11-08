@@ -133,6 +133,8 @@ message DerivationExpression {
             OR = 10;
             EQUALS = 11;
             COVERS = 12;
+            GREATER_THAN_OR_EQUAL = 13;
+            LESS_THAN_OR_EQUAL = 14;
         }
     }
 

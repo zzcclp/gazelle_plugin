@@ -21,15 +21,19 @@ import org.apache.arrow.memory.ArrowBuf
 import java.util.ArrayList
 import java.util.Collections
 import java.util.concurrent.TimeUnit._
+
 import util.control.Breaks._
+import java.util
 
 import com.intel.oap.GazellePluginConfig
 import com.intel.oap.vectorized.ArrowWritableColumnVector
 import org.apache.spark.sql.util.ArrowUtils
 import com.intel.oap.vectorized.ExpressionEvaluator
 import com.intel.oap.vectorized.BatchIterator
-
 import com.google.common.collect.Lists
+import com.intel.oap.substrait.`type`.TypeBuiler
+import com.intel.oap.substrait.expression.{AggregateFunctionNode, ExpressionBuilder, ExpressionNode}
+import com.intel.oap.substrait.rel.{RelBuilder, RelNode}
 import org.apache.hadoop.mapreduce.TaskAttemptID
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.internal.Logging
@@ -41,7 +45,6 @@ import org.apache.spark.sql.vectorized._
 import org.apache.spark.sql.execution.aggregate.HashAggregateExec
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.TaskContext
-
 import org.apache.arrow.gandiva.evaluator._
 import org.apache.arrow.gandiva.exceptions.GandivaException
 import org.apache.arrow.gandiva.expression._
@@ -503,9 +506,60 @@ class ColumnarHashAggregation(
       "hashAggregateArrays",
       Lists.newArrayList(nativeSchemaNode, aggrActionNode, aggregateResultNode, resultExprNode),
       resultType /*dummy ret type, won't be used*/ )
-
   }
 
+  def modeToKeyWord(aggregateMode: AggregateMode): String = {
+    aggregateMode match {
+      case Partial => "PARTIAL"
+      case PartialMerge => "PARTIAL_MERGE"
+      case Final => "FINAL"
+      case other =>
+        throw new UnsupportedOperationException(s"not currently supported: $other.")
+    }
+  }
+
+  def prepareAggRel(args: java.lang.Object, input: RelNode): RelNode = {
+    // Get the grouping idx
+    val groupingAttributes = groupingExpressions.map(expr => {
+      ConverterUtils.getAttrFromExpr(expr).toAttribute
+    })
+    val groupingList = new util.ArrayList[Integer]()
+    for (attr <- groupingAttributes) {
+      groupingList.add(originalInputAttributes.indexOf(attr))
+    }
+    // Get the aggregate function nodes
+    val aggregateFunctionList = new util.ArrayList[AggregateFunctionNode]()
+    groupingExpressions.toList.foreach(expr => {
+      val groupingExpr: Expression = ColumnarExpressionConverter
+        .replaceWithColumnarExpression(expr, originalInputAttributes)
+      val exprNode = groupingExpr.asInstanceOf[ExpressionTransformer].doTransform(args)
+      val outputTypeNode = ConverterUtils.getTypeNode(expr.dataType, expr.name, expr.nullable)
+      val aggFunctionNode = ExpressionBuilder.makeAggregateFunction(
+        Lists.newArrayList(exprNode), outputTypeNode)
+      aggregateFunctionList.add(aggFunctionNode)
+    })
+    aggregateExpressions.toList.foreach(aggExpr => {
+      val aggregatFunc = aggExpr.aggregateFunction
+      val mode = modeToKeyWord(aggExpr.mode)
+      val childrenNodes = aggregatFunc.children.toList.map(expr => {
+        val aggExpr: Expression = ColumnarExpressionConverter
+          .replaceWithColumnarExpression(expr, originalInputAttributes)
+        aggExpr.asInstanceOf[ExpressionTransformer].doTransform(args)
+      })
+      val childrenNodeList = new util.ArrayList[ExpressionNode]()
+      for (node <- childrenNodes) {
+        childrenNodeList.add(node)
+      }
+      // FIXME: return type of a aggregateFunciton
+      val outputTypeNode = ConverterUtils.getTypeNode(
+        aggregatFunc.dataType, "res", aggregatFunc.nullable)
+      val aggFunctionNode = ExpressionBuilder
+        .makeAggregateFunction(childrenNodeList, mode, outputTypeNode)
+      aggregateFunctionList.add(aggFunctionNode)
+    })
+    // Get Aggregate Rel
+    RelBuilder.makeAggregateRel(input, groupingList, aggregateFunctionList)
+  }
 }
 
 object ColumnarHashAggregation extends Logging {
@@ -527,5 +581,25 @@ object ColumnarHashAggregation extends Logging {
       output,
       sparkConf)
     ins.prepareKernelFunction
+  }
+
+  def prepareAggRel(args: java.lang.Object,
+                    input: RelNode,
+                    groupingExpressions: Seq[NamedExpression],
+                    originalInputAttributes: Seq[Attribute],
+                    aggregateExpressions: Seq[AggregateExpression],
+                    aggregateAttributes: Seq[Attribute],
+                    resultExpressions: Seq[NamedExpression],
+                    output: Seq[Attribute],
+                    sparkConf: SparkConf): RelNode = {
+    val ins = new ColumnarHashAggregation(
+      groupingExpressions,
+      originalInputAttributes,
+      aggregateExpressions,
+      aggregateAttributes,
+      resultExpressions,
+      output,
+      sparkConf)
+    ins.prepareAggRel(args, input)
   }
 }

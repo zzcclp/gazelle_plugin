@@ -17,42 +17,38 @@
 
 package com.intel.oap.expression
 
+import com.google.common.collect.Lists
 import com.intel.oap.substrait.expression.{ExpressionBuilder, ExpressionNode}
 import org.apache.arrow.gandiva.evaluator._
 import org.apache.arrow.gandiva.exceptions.GandivaException
 import org.apache.arrow.gandiva.expression._
+import org.apache.arrow.vector.types.IntervalUnit
 import org.apache.arrow.vector.types.pojo.ArrowType
 import org.apache.arrow.vector.types.pojo.Field
+import org.apache.arrow.vector.types.DateUnit
+import org.apache.spark.unsafe.types.CalendarInterval
+import org.apache.spark.sql.types.CalendarIntervalType
 import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types._
 
 import scala.collection.mutable.ListBuffer
 
-class ColumnarAlias(child: Expression, name: String)(
-    override val exprId: ExprId,
-    override val qualifier: Seq[String],
-    override val explicitMetadata: Option[Metadata])
-    extends Alias(child, name)(exprId, qualifier, explicitMetadata)
-    with ColumnarExpression {
-
-  override def doColumnarCodeGen(args: java.lang.Object): (TreeNode, ArrowType) = {
-    child.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
-  }
-
-}
-
-class AttributeReferenceTransformer(
-    name: String,
-    ordinal: Int,
-    dataType: DataType,
-    nullable: Boolean = true,
-    override val metadata: Metadata = Metadata.empty)(
-    override val exprId: ExprId,
-    override val qualifier: Seq[String])
-    extends AttributeReference(name, dataType, nullable, metadata)(exprId, qualifier)
+class LiteralTransformer(lit: Literal)
+    extends Literal(lit.value, lit.dataType)
     with ExpressionTransformer {
 
   override def doTransform(args: java.lang.Object): ExpressionNode = {
-    ExpressionBuilder.makeSelection(ordinal.asInstanceOf[java.lang.Integer])
+    dataType match {
+      case t: DoubleType =>
+        value match {
+          case null =>
+            throw new UnsupportedOperationException(s"null is not supported")
+          case _ =>
+            ExpressionBuilder.makeLiteral(value.asInstanceOf[java.lang.Double])
+        }
+      case other =>
+        throw new UnsupportedOperationException(s"$other is not supported")
+    }
   }
 }

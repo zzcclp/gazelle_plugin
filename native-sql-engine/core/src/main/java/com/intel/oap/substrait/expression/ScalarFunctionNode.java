@@ -15,42 +15,41 @@
  * limitations under the License.
  */
 
-package com.intel.oap.substrait.rel;
+package com.intel.oap.substrait.expression;
 
-import com.intel.oap.substrait.expression.ExpressionNode;
 import com.intel.oap.substrait.type.TypeNode;
 import io.substrait.*;
 
 import java.util.ArrayList;
 
-public class ProjectRelNode implements RelNode {
-    private final RelNode input;
-    private final ArrayList<ExpressionNode> expressionNodes =
-            new ArrayList<>();
-    private final ArrayList<TypeNode> inputTypes = new ArrayList<>();
+public class ScalarFunctionNode implements ExpressionNode {
+    private final Long functionId;
+    private final ArrayList<ExpressionNode> expressionNodes = new ArrayList<>();
+    private final TypeNode typeNode;
 
-    ProjectRelNode(RelNode input,
-                   ArrayList<ExpressionNode> expressionNodes,
-                   ArrayList<TypeNode> inputTypes) {
-        this.input = input;
+    ScalarFunctionNode(Long functionId, ArrayList<ExpressionNode> expressionNodes,
+                       TypeNode typeNode) {
+        this.functionId = functionId;
         this.expressionNodes.addAll(expressionNodes);
-        this.inputTypes.addAll(inputTypes);
+        this.typeNode = typeNode;
     }
 
     @Override
-    public Rel toProtobuf() {
-        ProjectRel.Builder projectBuilder = ProjectRel.newBuilder();
-        if (input != null) {
-            projectBuilder.setInput(input.toProtobuf());
-        }
+    public Expression toProtobuf() {
+        Extensions.FunctionId.Builder functionIdBuilder =
+                Extensions.FunctionId.newBuilder();
+        functionIdBuilder.setId(functionId);
+
+        Expression.ScalarFunction.Builder scalarBuilder =
+                Expression.ScalarFunction.newBuilder();
+        scalarBuilder.setId(functionIdBuilder.build());
         for (ExpressionNode expressionNode : expressionNodes) {
-            projectBuilder.addExpressions(expressionNode.toProtobuf());
+            scalarBuilder.addArgs(expressionNode.toProtobuf());
         }
-        for (TypeNode type : inputTypes) {
-            projectBuilder.addInputTypes(type.toProtobuf());
-        }
-        Rel.Builder builder = Rel.newBuilder();
-        builder.setProject(projectBuilder.build());
+        scalarBuilder.setOutputType(typeNode.toProtobuf());
+
+        Expression.Builder builder = Expression.newBuilder();
+        builder.setScalarFunction(scalarBuilder.build());
         return builder.build();
     }
 }

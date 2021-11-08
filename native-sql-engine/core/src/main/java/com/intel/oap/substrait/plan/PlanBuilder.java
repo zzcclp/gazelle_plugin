@@ -15,16 +15,18 @@
  * limitations under the License.
  */
 
-package com.intel.oap.substrait.type;
+package com.intel.oap.substrait.plan;
 
-public class TypeBuiler {
-    private TypeBuiler() {}
+import com.intel.oap.substrait.extensions.MappingNode;
+import com.intel.oap.substrait.rel.RelNode;
 
-    public static TypeNode makeFP64(String name, Boolean nullable) {
-        return new FP64TypeNode(name, nullable);
-    }
+import java.util.ArrayList;
 
-    public static TypeNode makeBoolean(String name, Boolean nullable) {
-        return new BooleanTypeNode(name, nullable);
+public class PlanBuilder {
+    private PlanBuilder() {}
+
+    public static PlanNode makePlan(ArrayList<MappingNode> mappingNodes,
+                                    ArrayList<RelNode> relNodes) {
+        return new PlanNode(mappingNodes, relNodes);
     }
 }

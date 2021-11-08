@@ -455,7 +455,7 @@ object ColumnarDateTimeExpressions {
       }
       if (left.dataType == StringType) {
         right match {
-          case literal: ColumnarLiteral =>
+          case literal: LiteralTransformer =>
             val format = literal.value.toString
             if (format.length > 10) {
               throw new UnsupportedOperationException(

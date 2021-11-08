@@ -25,13 +25,12 @@ import org.apache.arrow.vector.types.pojo.ArrowType
 import org.apache.arrow.vector.types.FloatingPointPrecision
 import org.apache.arrow.vector.types.pojo.Field
 import org.apache.arrow.vector.types.DateUnit
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.optimizer._
 import org.apache.spark.sql.types._
-import scala.collection.mutable.ListBuffer
 
+import scala.collection.mutable.ListBuffer
 import com.intel.oap.expression.ColumnarDateTimeExpressions.ColumnarDayOfMonth
 import com.intel.oap.expression.ColumnarDateTimeExpressions.ColumnarDayOfWeek
 import com.intel.oap.expression.ColumnarDateTimeExpressions.ColumnarDayOfYear
@@ -47,48 +46,37 @@ import com.intel.oap.expression.ColumnarDateTimeExpressions.ColumnarUnixMicros
 import com.intel.oap.expression.ColumnarDateTimeExpressions.ColumnarUnixMillis
 import com.intel.oap.expression.ColumnarDateTimeExpressions.ColumnarUnixSeconds
 import com.intel.oap.expression.ColumnarDateTimeExpressions.ColumnarUnixTimestamp
+import com.intel.oap.substrait.`type`.TypeBuiler
+import com.intel.oap.substrait.expression.{ExpressionBuilder, ExpressionNode}
 import org.apache.arrow.vector.types.TimeUnit
-
 import org.apache.spark.sql.catalyst.util.DateTimeConstants
 import org.apache.spark.sql.execution.datasources.v2.arrow.SparkSchemaUtils
 
 /**
  * A version of add that supports columnar processing for longs.
  */
-class ColumnarIsNotNull(child: Expression, original: Expression)
+class IsNotNullTransformer(child: Expression, original: Expression)
     extends IsNotNull(child: Expression)
-    with ColumnarExpression
+    with ExpressionTransformer
     with Logging {
 
-  buildCheck()
-
-  def buildCheck(): Unit = {
-    val supportedTypes = List(
-      ByteType,
-      ShortType,
-      IntegerType,
-      LongType,
-      FloatType,
-      DoubleType,
-      DateType,
-      BooleanType,
-      StringType,
-      BinaryType)
-    if (supportedTypes.indexOf(child.dataType) == -1 &&
-        !child.dataType.isInstanceOf[DecimalType]) {
-      throw new UnsupportedOperationException(
-        s"${child.dataType} is not supported in ColumnarIsNotNull.")
+  override def doTransform(args: java.lang.Object): ExpressionNode = {
+    val child_node: ExpressionNode =
+      child.asInstanceOf[ExpressionTransformer].doTransform(args)
+    if (!child_node.isInstanceOf[ExpressionNode]) {
+      throw new UnsupportedOperationException(s"not supported yet.")
     }
-  }
-
-  override def doColumnarCodeGen(args: java.lang.Object): (TreeNode, ArrowType) = {
-    val (child_node, childType): (TreeNode, ArrowType) =
-      child.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
-
-    val resultType = new ArrowType.Bool()
-    val funcNode =
-      TreeBuilder.makeFunction("isnotnull", Lists.newArrayList(child_node), resultType)
-    (funcNode, resultType)
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
+    val functionName = "IS_NOT_NULL"
+    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
+    if (!functionMap.containsKey(functionName)) {
+      functionMap.put(functionName, functionId)
+    } else {
+      functionId = functionMap.get(functionName)
+    }
+    val expressNodes = Lists.newArrayList(child_node.asInstanceOf[ExpressionNode])
+    val typeNode = TypeBuiler.makeBoolean("res", true)
+    ExpressionBuilder.makeScalarFunction(functionId, expressNodes, typeNode)
   }
 }
 
@@ -762,7 +750,7 @@ object ColumnarUnaryOperator {
     case in: IsNull =>
       new ColumnarIsNull(child, in)
     case i: IsNotNull =>
-      new ColumnarIsNotNull(child, i)
+      new IsNotNullTransformer(child, i)
     case y: Year =>
       if (child.dataType.isInstanceOf[TimestampType]) {
         new ColumnarDateTimeExpressions.ColumnarYear(child)

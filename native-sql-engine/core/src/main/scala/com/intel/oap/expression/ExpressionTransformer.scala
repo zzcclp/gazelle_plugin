@@ -15,16 +15,13 @@
  * limitations under the License.
  */
 
-package com.intel.oap.substrait.type;
+package com.intel.oap.expression
 
-public class TypeBuiler {
-    private TypeBuiler() {}
+import com.intel.oap.substrait.expression.ExpressionNode
 
-    public static TypeNode makeFP64(String name, Boolean nullable) {
-        return new FP64TypeNode(name, nullable);
-    }
+trait ExpressionTransformer {
 
-    public static TypeNode makeBoolean(String name, Boolean nullable) {
-        return new BooleanTypeNode(name, nullable);
-    }
+  def doTransform(args: java.lang.Object): ExpressionNode = {
+    throw new UnsupportedOperationException(s"Not support doTransform.")
+  }
 }

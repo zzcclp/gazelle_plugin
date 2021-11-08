@@ -36,6 +36,7 @@ import org.apache.arrow.gandiva.expression._
 import org.apache.arrow.vector.types.pojo.ArrowType
 import com.google.common.collect.Lists
 import com.intel.oap.GazellePluginConfig
+import com.intel.oap.substrait.rel.RelNode
 import org.apache.spark.sql.execution.datasources.v2.arrow.SparkMemoryUtils;
 
 case class ConditionProjectExecTransformer(
@@ -47,6 +48,9 @@ case class ConditionProjectExecTransformer(
     with PredicateHelper
     with AliasAwareOutputPartitioning
     with Logging {
+
+  val numaBindingInfo = GazellePluginConfig.getConf.numaBindingInfo
+
   val sparkConf: SparkConf = sparkContext.getConf
 
   override def supportsColumnar = true
@@ -129,69 +133,18 @@ case class ConditionProjectExecTransformer(
 
   // override def canEqual(that: Any): Boolean = false
 
-  def getCondProjectKernelFunction(childTreeNode: TreeNode): TreeNode = {
-    val (filterNode, projectNode) =
-      ColumnarConditionProjector.prepareKernelFunction(condition, projectList, child.output)
-    if (filterNode != null && projectNode != null) {
-      val condProjectNode = TreeBuilder.makeFunction(
-          s"CondProject",
-          Lists.newArrayList(projectNode, filterNode),
-          new ArrowType.Int(32, true))
-      if (childTreeNode != null) {
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(condProjectNode, childTreeNode),
-          new ArrowType.Int(32, true))
-      } else {
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(condProjectNode),
-          new ArrowType.Int(32, true))
-      }
-    } else if (filterNode != null) {
-      val condProjectNode = TreeBuilder.makeFunction(
-        s"CondProject",
-        Lists.newArrayList(filterNode),
-        new ArrowType.Int(32, true))
-      if (childTreeNode != null) {
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(condProjectNode, childTreeNode),
-          new ArrowType.Int(32, true))
-      } else {
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(condProjectNode),
-          new ArrowType.Int(32, true))
-      }
-    } else if (projectNode != null) {
-      val condProjectNode = TreeBuilder.makeFunction(
-        s"CondProject",
-        Lists.newArrayList(projectNode),
-        new ArrowType.Int(32, true))
-      if (childTreeNode != null) {
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(condProjectNode, childTreeNode),
-          new ArrowType.Int(32, true))
-      } else {
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(condProjectNode),
-          new ArrowType.Int(32, true))
-      }
-    } else {
-      null
-    }
+  def getRelNode(args: java.lang.Object, childRel: RelNode): RelNode = {
+    ColumnarConditionProjector.prepareCondProjectRel(
+      args, condition, projectList, child.output, childRel)
   }
 
-  override def doTransform: TransformContext = {
+  override def doTransform(args: java.lang.Object): TransformContext = {
     val (childCtx, kernelFunction) = child match {
       case c: TransformSupport if c.supportTransform =>
-        val ctx = c.doTransform
-        (ctx, getCondProjectKernelFunction(ctx.root))
+        val ctx = c.doTransform(args)
+        (ctx, getRelNode(args, ctx.root))
       case _ =>
-        (null, getCondProjectKernelFunction(null))
+        (null, getRelNode(args, null))
     }
     if (kernelFunction == null) {
       return childCtx
@@ -208,6 +161,35 @@ case class ConditionProjectExecTransformer(
   protected override def doExecute()
       : org.apache.spark.rdd.RDD[org.apache.spark.sql.catalyst.InternalRow] = {
     throw new UnsupportedOperationException(s"This operator doesn't support doExecute().")
+  }
+
+  ColumnarConditionProjector.prebuild(condition, projectList, child.output)
+
+  override def doExecuteColumnar(): RDD[ColumnarBatch] = {
+    val numOutputRows = longMetric("numOutputRows")
+    val numOutputBatches = longMetric("numOutputBatches")
+    val numInputBatches = longMetric("numInputBatches")
+    val procTime = longMetric("processTime")
+    numOutputRows.set(0)
+    numOutputBatches.set(0)
+    numInputBatches.set(0)
+
+    child.executeColumnar().mapPartitions { iter =>
+      GazellePluginConfig.getConf
+      ExecutorManager.tryTaskSet(numaBindingInfo)
+      val condProj = ColumnarConditionProjector.create(
+        condition,
+        projectList,
+        child.output,
+        numInputBatches,
+        numOutputBatches,
+        numOutputRows,
+        procTime)
+      SparkMemoryUtils.addLeakSafeTaskCompletionListener[Unit]((tc: TaskContext) => {
+        condProj.close()
+      })
+      new CloseableColumnBatchIterator(condProj.createIterator(iter))
+    }
   }
 }
 

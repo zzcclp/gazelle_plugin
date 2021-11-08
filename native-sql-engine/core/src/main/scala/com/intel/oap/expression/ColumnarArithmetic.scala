@@ -18,6 +18,8 @@
 package com.intel.oap.expression
 
 import com.google.common.collect.Lists
+import com.intel.oap.substrait.`type`.TypeBuiler
+import com.intel.oap.substrait.expression.{ExpressionBuilder, ExpressionNode}
 import org.apache.arrow.gandiva.evaluator._
 import org.apache.arrow.gandiva.exceptions.GandivaException
 import org.apache.arrow.gandiva.expression._
@@ -29,7 +31,6 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.types._
 
 import scala.collection.mutable.ListBuffer
-
 import org.apache.arrow.gandiva.evaluator.DecimalTypeUtil
 
 /**
@@ -158,9 +159,9 @@ class ColumnarSubtract(left: Expression, right: Expression, original: Expression
   }
 }
 
-class ColumnarMultiply(left: Expression, right: Expression, original: Expression)
+class MultiplyTransformer(left: Expression, right: Expression, original: Expression)
     extends Multiply(left: Expression, right: Expression)
-    with ColumnarExpression
+    with ExpressionTransformer
     with Logging {
 
   val left_val: Any = left match {
@@ -186,65 +187,31 @@ class ColumnarMultiply(left: Expression, right: Expression, original: Expression
       right
   }
 
-  override def doColumnarCodeGen(args: java.lang.Object): (TreeNode, ArrowType) = {
-    var (left_node, left_type): (TreeNode, ArrowType) =
-      left_val.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
-    var (right_node, right_type): (TreeNode, ArrowType) =
-      right_val.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
+  override def doTransform(args: java.lang.Object): ExpressionNode = {
+    val left_node =
+      left_val.asInstanceOf[ExpressionTransformer].doTransform(args)
+    val right_node =
+      right_val.asInstanceOf[ExpressionTransformer].doTransform(args)
 
-    (left_type, right_type) match {
-      case (l: ArrowType.Decimal, r: ArrowType.Decimal) =>
-        var resultType = DecimalTypeUtil.getResultTypeForOperation(
-          DecimalTypeUtil.OperationType.MULTIPLY, l, r)
-        // Scaling down the unnecessary scale for Literal to avoid precision loss
-        val newLeftNode = left_val match {
-          case literal: ColumnarLiteral =>
-            val leftStr = literal.value.asInstanceOf[Decimal].toDouble.toString
-            val newLeftPrecision = leftStr.length - 1
-            val newLeftScale = leftStr.split('.')(1).length
-            val newLeftType =
-              new ArrowType.Decimal(newLeftPrecision, newLeftScale, 128)
-            resultType = DecimalTypeUtil.getResultTypeForOperation(
-              DecimalTypeUtil.OperationType.MULTIPLY, newLeftType, r)
-            TreeBuilder.makeFunction(
-              "castDECIMAL", Lists.newArrayList(left_node), newLeftType)
-          case _ =>
-            left_node
-        }
-        val newRightNode = right_val match {
-          case literal: ColumnarLiteral =>
-            val rightStr = literal.value.asInstanceOf[Decimal].toDouble.toString
-            val newRightPrecision = rightStr.length - 1
-            val newRightScale = rightStr.split('.')(1).length
-            val newRightType =
-              new ArrowType.Decimal(newRightPrecision, newRightScale, 128)
-            resultType = DecimalTypeUtil.getResultTypeForOperation(
-              DecimalTypeUtil.OperationType.MULTIPLY, l, newRightType)
-            TreeBuilder.makeFunction(
-              "castDECIMAL", Lists.newArrayList(right_node), newRightType)
-          case _ =>
-            right_node
-        }
-        val mulNode = TreeBuilder.makeFunction(
-          "multiply", Lists.newArrayList(newLeftNode, newRightNode), resultType)
-        (mulNode, resultType)
-      case _ =>
-        val resultType = CodeGeneration.getResultType(left_type, right_type)
-        if (!left_type.equals(resultType)) {
-          val func_name = CodeGeneration.getCastFuncName(resultType)
-          left_node =
-            TreeBuilder.makeFunction(func_name, Lists.newArrayList(left_node), resultType),
-        }
-        if (!right_type.equals(resultType)) {
-          val func_name = CodeGeneration.getCastFuncName(resultType)
-          right_node =
-            TreeBuilder.makeFunction(func_name, Lists.newArrayList(right_node), resultType),
-        }
-        //logInfo(s"(TreeBuilder.makeFunction(multiply, Lists.newArrayList($left_node, $right_node), $resultType), $resultType)")
-        val funcNode = TreeBuilder.makeFunction(
-          "multiply", Lists.newArrayList(left_node, right_node), resultType)
-        (funcNode, resultType)
+    if (!left_node.isInstanceOf[ExpressionNode] ||
+        !right_node.isInstanceOf[ExpressionNode]) {
+      throw new UnsupportedOperationException(s"not supported yet.")
     }
+
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
+    val functionName = "MULTIPLY"
+    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
+    if (!functionMap.containsKey(functionName)) {
+      functionMap.put(functionName, functionId)
+    } else {
+      functionId = functionMap.get(functionName)
+    }
+    val expressNodes = Lists.newArrayList(
+      left_node.asInstanceOf[ExpressionNode],
+      right_node.asInstanceOf[ExpressionNode])
+    val typeNode = ConverterUtils.getTypeNode(left.dataType, "res", nullable = true)
+
+    ExpressionBuilder.makeScalarFunction(functionId, expressNodes, typeNode)
   }
 }
 
@@ -291,7 +258,7 @@ class ColumnarDivide(left: Expression, right: Expression,
             DecimalTypeUtil.OperationType.DIVIDE, l, r)
         }
         val newLeftNode = left_val match {
-          case literal: ColumnarLiteral =>
+          case literal: LiteralTransformer =>
             val leftStr = literal.value.asInstanceOf[Decimal].toDouble.toString
             val newLeftPrecision = leftStr.length - 1
             val newLeftScale = leftStr.split('.')(1).length
@@ -305,7 +272,7 @@ class ColumnarDivide(left: Expression, right: Expression,
             left_node
         }
         val newRightNode = right_val match {
-          case literal: ColumnarLiteral =>
+          case literal: LiteralTransformer =>
             val rightStr = literal.value.asInstanceOf[Decimal].toDouble.toString
             val newRightPrecision = rightStr.length - 1
             val newRightScale = rightStr.split('.')(1).length
@@ -411,7 +378,7 @@ object ColumnarBinaryArithmetic {
       case s: Subtract =>
         new ColumnarSubtract(left, right, s)
       case m: Multiply =>
-        new ColumnarMultiply(left, right, m)
+        new MultiplyTransformer(left, right, m)
       case d: Divide =>
         new ColumnarDivide(left, right, d)
       case a: BitwiseAnd =>

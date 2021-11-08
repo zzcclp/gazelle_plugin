@@ -5,7 +5,6 @@ package io.substrait;
 import "type.proto";
 import "expression.proto";
 import "selection.proto";
-import "type_expressions.proto";
 
 option java_multiple_files = true;
 option csharp_namespace = "Substrait.Protobuf";
@@ -94,9 +93,8 @@ message ProjectRel {
     RelCommon common = 1;
     Rel input = 2;
     repeated Expression expressions = 3;
-    repeated DerivationExpression derivation_expressions = 4;
-    repeated Type input_types = 5;
-    repeated Type onput_types = 6;
+    repeated Type input_types = 4;
+    repeated Type output_types = 5;
 }
 
 message JoinRel {
@@ -148,8 +146,7 @@ message FilterRel {
     RelCommon common = 1;
     Rel input = 2;
     Expression condition = 3;
-    DerivationExpression derivation_condition = 4;
-    repeated Type input_types = 5;
+    repeated Type input_types = 4;
 }
 
 message SetRel {

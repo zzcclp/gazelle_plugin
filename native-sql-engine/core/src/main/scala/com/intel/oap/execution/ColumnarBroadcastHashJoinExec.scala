@@ -20,6 +20,7 @@ package com.intel.oap.execution
 import com.google.common.collect.Lists
 import com.intel.oap.GazellePluginConfig
 import com.intel.oap.expression._
+import com.intel.oap.substrait.rel.RelNode
 import com.intel.oap.vectorized.{ExpressionEvaluator, _}
 import org.apache.arrow.gandiva.expression._
 import org.apache.arrow.vector.types.pojo.{ArrowType, Field}
@@ -238,13 +239,15 @@ case class ColumnarBroadcastHashJoinExec(
       this
   }
 
-  override def dependentPlanCtx: TransformContext = {
-    val inputSchema = ConverterUtils.toArrowSchema(buildPlan.output)
-    TransformContext(
-      inputSchema,
-      null,
-      ColumnarConditionedProbeJoin.prepareHashBuildFunction(buildKeyExprs, buildPlan.output, 2))
-  }
+//  override def dependentPlanCtx: TransformContext = {
+//    val inputSchema = ConverterUtils.toArrowSchema(buildPlan.output)
+//    TransformContext(
+//      inputSchema,
+//      null,
+//      ColumnarConditionedProbeJoin.prepareHashBuildFunction(buildKeyExprs, buildPlan.output, 2))
+//  }
+
+  override def dependentPlanCtx: TransformContext = null
 
   override def updateMetrics(out_num_rows: Long, process_time: Long): Unit = {
     val numOutputRows = longMetric("numOutputRows")
@@ -278,33 +281,35 @@ case class ColumnarBroadcastHashJoinExec(
       isNullAwareAntiJoin = isNullAwareAntiJoin)
   }
 
-  override def doTransform: TransformContext = {
-    val childCtx = streamedPlan match {
-      case c: TransformSupport if c.supportTransform =>
-        c.doTransform
-      case _ =>
-        null
-    }
-    val outputSchema = ConverterUtils.toArrowSchema(output)
-    val (codeGenNode, inputSchema) = if (childCtx != null) {
-      (
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(getKernelFunction, childCtx.root),
-          new ArrowType.Int(32, true)),
-        childCtx.inputSchema)
-    } else {
-      (
-        TreeBuilder.makeFunction(
-          s"child",
-          Lists.newArrayList(getKernelFunction),
-          new ArrowType.Int(32, true)),
-        ConverterUtils.toArrowSchema(streamedPlan.output))
-    }
-    TransformContext(inputSchema, outputSchema, codeGenNode)
-  }
+//  override def doTransform(args: java.lang.Object): TransformContext = {
+//    val childCtx = streamedPlan match {
+//      case c: TransformSupport if c.supportTransform =>
+//        c.doTransform(args)
+//      case _ =>
+//        null
+//    }
+//    val outputSchema = ConverterUtils.toArrowSchema(output)
+//    val (codeGenNode, inputSchema) = if (childCtx != null) {
+//      (
+//        TreeBuilder.makeFunction(
+//          s"child",
+//          Lists.newArrayList(getKernelFunction, childCtx.root),
+//          new ArrowType.Int(32, true)),
+//        childCtx.inputSchema)
+//    } else {
+//      (
+//        TreeBuilder.makeFunction(
+//          s"child",
+//          Lists.newArrayList(getKernelFunction),
+//          new ArrowType.Int(32, true)),
+//        ConverterUtils.toArrowSchema(streamedPlan.output))
+//    }
+//    TransformContext(inputSchema, outputSchema, codeGenNode)
+//  }
 
-  def doTransformForStandalone: TransformContext = {
+  override def doTransform(args: java.lang.Object): TransformContext = null
+
+  def doTransformForStandalone: TransformGandivaContext = {
     val outputSchema = ConverterUtils.toArrowSchema(output)
     val (codeGenNode, inputSchema) = (
       TreeBuilder.makeFunction(
@@ -312,7 +317,7 @@ case class ColumnarBroadcastHashJoinExec(
         Lists.newArrayList(getKernelFunction),
         new ArrowType.Int(32, true)),
       ConverterUtils.toArrowSchema(streamedPlan.output))
-    TransformContext(inputSchema, outputSchema, codeGenNode)
+    TransformGandivaContext(inputSchema, outputSchema, codeGenNode)
   }
 
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
@@ -451,8 +456,8 @@ case class ColumnarBroadcastHashJoinExec(
     ArrowUtils.fromAttributes(attributes)
   }
 
-  def getCodeGenCtx: TransformContext = {
-    var resCtx: TransformContext = null
+  def getCodeGenCtx: TransformGandivaContext = {
+    var resCtx: TransformGandivaContext = null
     try {
       // If this BHJ contains condition, currently we only support doing codegen through WSCG
       val childCtx = doTransformForStandalone
@@ -461,7 +466,7 @@ case class ColumnarBroadcastHashJoinExec(
         Lists.newArrayList(childCtx.root),
         new ArrowType.Int(32, true))
       resCtx =
-        TransformContext(childCtx.inputSchema, childCtx.outputSchema, wholeStageCodeGenNode)
+        TransformGandivaContext(childCtx.inputSchema, childCtx.outputSchema, wholeStageCodeGenNode)
     } catch {
       case e: UnsupportedOperationException
           if e.getMessage == "Unsupport to generate native expression from replaceable expression." =>
@@ -552,7 +557,7 @@ case class ColumnarBroadcastHashJoinExec(
       val hashRelationObject = relation.hashRelationObj
       val depIter =
         new CloseableColumnBatchIterator(relation.getColumnarBatchAsIter)
-      val ctx = dependentPlanCtx
+      val ctx = dependentGandivaPlanCtx
       val hash_relation_expression = TreeBuilder
         .makeExpression(ctx.root, Field.nullable("result", new ArrowType.Int(32, true)))
       val hashRelationKernel = new ExpressionEvaluator()

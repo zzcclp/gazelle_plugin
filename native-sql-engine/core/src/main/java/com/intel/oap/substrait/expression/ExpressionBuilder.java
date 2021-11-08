@@ -17,7 +17,10 @@
 
 package com.intel.oap.substrait.expression;
 
+import com.intel.oap.substrait.type.TypeNode;
 import io.substrait.*;
+
+import java.util.ArrayList;
 
 /**
  * Contains helper functions for constructing substrait relations.
@@ -25,7 +28,27 @@ import io.substrait.*;
 public class ExpressionBuilder {
     private ExpressionBuilder() {}
 
-    public static ExpressionNode makeLiteral(Double doubleConstant) {
+    public static DoubleLiteralNode makeLiteral(Double doubleConstant) {
         return new DoubleLiteralNode(doubleConstant);
+    }
+
+    public static ScalarFunctionNode makeScalarFunction(
+            Long functionId, ArrayList<ExpressionNode> expressionNodes,
+            TypeNode typeNode) {
+        return new ScalarFunctionNode(functionId, expressionNodes, typeNode);
+    }
+
+    public static SelectionNode makeSelection(Integer fieldIdx) {
+        return new SelectionNode(fieldIdx);
+    }
+
+    public static AggregateFunctionNode makeAggregateFunction(
+            ArrayList<ExpressionNode> expressionNodes, String phase, TypeNode outputTypeNode) {
+        return new AggregateFunctionNode(expressionNodes, phase, outputTypeNode);
+    }
+
+    public static AggregateFunctionNode makeAggregateFunction(
+            ArrayList<ExpressionNode> expressionNodes, TypeNode outputTypeNode) {
+        return new AggregateFunctionNode(expressionNodes, outputTypeNode);
     }
 }

@@ -23,6 +23,8 @@ import java.util.concurrent.TimeUnit
 
 import com.google.common.collect.Lists
 import com.intel.oap.expression.ColumnarConditionProjector.{FieldOptimizedProjector, FilterProjector, ProjectorWrapper}
+import com.intel.oap.substrait.expression.ExpressionNode
+import com.intel.oap.substrait.rel.{FilterRelNode, ProjectRelNode, RelBuilder, RelNode}
 import com.intel.oap.vectorized.{ArrowWritableColumnVector, ExpressionEvaluator}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions._
@@ -439,7 +441,48 @@ object ColumnarConditionProjector extends Logging {
     }
 
     (conditionNode, projectionNode)
+  }
 
+  def prepareCondProjectRel(
+      args: java.lang.Object,
+      condExpr: Expression,
+      projectList: Seq[NamedExpression],
+      originalInputAttributes: Seq[Attribute],
+      input: RelNode): RelNode = {
+    val typeNodes = ConverterUtils.getTypeNodeFromAttributes(originalInputAttributes)
+    val filterNode = if (condExpr != null) {
+      val columnarCondExpr: Expression = ColumnarExpressionConverter
+        .replaceWithColumnarExpression(condExpr, attributeSeq = originalInputAttributes)
+      val condExprNode =
+        columnarCondExpr.asInstanceOf[ExpressionTransformer].doTransform(args)
+      RelBuilder.makeFilterRel(input, condExprNode, typeNodes)
+    } else {
+      null
+    }
+    val projectRel = if (projectList != null && projectList.nonEmpty) {
+      val columnarProjExprs: Seq[Expression] = projectList.map(expr => {
+        ColumnarExpressionConverter
+          .replaceWithColumnarExpression(expr, attributeSeq = originalInputAttributes)
+      })
+      val projExprNodeList = new java.util.ArrayList[ExpressionNode]()
+      for (expr <- columnarProjExprs) {
+        projExprNodeList.add(expr.asInstanceOf[ExpressionTransformer].doTransform(args))
+      }
+      if (filterNode != null) {
+        // The result of Filter will be the input of Project
+        RelBuilder.makeProjectRel(filterNode, projExprNodeList, typeNodes)
+      } else {
+        // The original input will be the input of Project.
+        RelBuilder.makeProjectRel(input, projExprNodeList, typeNodes)
+      }
+    } else {
+      null
+    }
+    if (projectRel == null) {
+      filterNode
+    } else {
+      projectRel
+    }
   }
 
   def prebuild(

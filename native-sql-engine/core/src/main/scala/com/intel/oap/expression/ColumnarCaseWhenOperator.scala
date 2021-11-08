@@ -72,7 +72,7 @@ class ColumnarCaseWhen(
 
     var colRetExpr = branches(i)._2
     if (rename && colRetExpr.isInstanceOf[AttributeReference]) {
-      colRetExpr = new ColumnarBoundReference(inputAttributes.indexOf(colRetExpr),
+      colRetExpr = new BoundReferenceTransformer(inputAttributes.indexOf(colRetExpr),
                                               colRetExpr.dataType, colRetExpr.nullable)
     }
     val (ret_node, retType): (TreeNode, ArrowType) =
@@ -90,7 +90,7 @@ class ColumnarCaseWhen(
       val (else_node, elseType): (TreeNode, ArrowType) = if (elseValueExpr != null) {
         var colElseValueExpr = ColumnarExpressionConverter.replaceWithColumnarExpression(elseValueExpr)
         if (rename && colElseValueExpr.isInstanceOf[AttributeReference]) {
-          colElseValueExpr = new ColumnarBoundReference(inputAttributes.indexOf(colElseValueExpr),
+          colElseValueExpr = new BoundReferenceTransformer(inputAttributes.indexOf(colElseValueExpr),
             colElseValueExpr.dataType, colElseValueExpr.nullable)
         }
         colElseValueExpr.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
@@ -105,7 +105,7 @@ class ColumnarCaseWhen(
 
     var colRetExpr = branches(idx)._2
     if (rename && colRetExpr.isInstanceOf[AttributeReference]) {
-      colRetExpr = new ColumnarBoundReference(inputAttributes.indexOf(colRetExpr),
+      colRetExpr = new BoundReferenceTransformer(inputAttributes.indexOf(colRetExpr),
         colRetExpr.dataType, colRetExpr.nullable)
     }
     val (ret_node, ret_type): (TreeNode, ArrowType) =

@@ -56,25 +56,29 @@ class ColumnarSubString(str: Expression, pos: Expression, len: Expression, origi
     val (len_node, lenType): (TreeNode, ArrowType) =
       len.asInstanceOf[ColumnarExpression].doColumnarCodeGen(args)
 
-    //FIXME(): gandiva only support pos and len with int64 type
-    val lit_pos :ColumnarLiteral= pos.asInstanceOf[ColumnarLiteral]
+    // FIXME(): gandiva only support pos and len with int64 type
+    val lit_pos: LiteralTransformer = pos.asInstanceOf[LiteralTransformer]
     val lit_pos_val = lit_pos.value
-    val long_pos_node = TreeBuilder.makeLiteral(lit_pos_val.asInstanceOf[Integer].longValue() :java.lang.Long)
+    val long_pos_node = TreeBuilder.makeLiteral(
+      lit_pos_val.asInstanceOf[Integer].longValue(): java.lang.Long)
 
-    val lit_len :ColumnarLiteral= len.asInstanceOf[ColumnarLiteral]
+    val lit_len: Literal = len.asInstanceOf[LiteralTransformer]
     val lit_len_val = lit_len.value
-    val long_len_node = TreeBuilder.makeLiteral(lit_len_val.asInstanceOf[Integer].longValue() :java.lang.Long)
+    val long_len_node = TreeBuilder.makeLiteral(
+      lit_len_val.asInstanceOf[Integer].longValue(): java.lang.Long)
 
     val resultType = new ArrowType.Utf8()
     val funcNode =
-      TreeBuilder.makeFunction("substr", Lists.newArrayList(str_node, long_pos_node, long_len_node), resultType)
+      TreeBuilder.makeFunction(
+        "substr", Lists.newArrayList(str_node, long_pos_node, long_len_node), resultType)
     (funcNode, resultType)
   }
 }
 
 object ColumnarTernaryOperator {
 
-  def create(str: Expression, pos: Expression, len: Expression, original: Expression): Expression = original match {
+  def create(str: Expression, pos: Expression, len: Expression, original: Expression): Expression =
+    original match {
     case ss: Substring =>
       new ColumnarSubString(str, pos, len, ss)
     case other =>
