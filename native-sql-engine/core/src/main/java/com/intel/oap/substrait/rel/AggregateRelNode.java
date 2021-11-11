@@ -69,7 +69,9 @@ public class AggregateRelNode implements RelNode {
         if (input != null) {
             aggBuilder.setInput(input.toProtobuf());
         }
-        if (phase != null) {
+        if (phase == null) {
+            aggBuilder.setPhase(Expression.AggregationPhase.UNKNOWN);
+        } else {
             switch(phase) {
                 case "PARTIAL":
                     aggBuilder.setPhase(Expression.AggregationPhase.INITIAL_TO_INTERMEDIATE);
@@ -81,7 +83,7 @@ public class AggregateRelNode implements RelNode {
                     aggBuilder.setPhase(Expression.AggregationPhase.INTERMEDIATE_TO_RESULT);
                     break;
                 default:
-                    System.out.println("Not supported.");
+                    aggBuilder.setPhase(Expression.AggregationPhase.UNKNOWN);
             }
         }
         Rel.Builder builder = Rel.newBuilder();

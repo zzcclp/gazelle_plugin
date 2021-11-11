@@ -35,6 +35,7 @@
 #include <vector>
 
 #include "proto/protobuf_utils.h"
+#include "proto/substrait_utils.h"
 
 static jclass io_exception_class;
 static jclass unsupportedoperation_exception_class;
@@ -328,6 +329,26 @@ arrow::Status MakeExprVector(JNIEnv* env, jbyteArray exprs_arr,
     ret_types->push_back(root->result());
   }
 
+  return arrow::Status::OK();
+}
+
+arrow::Status ParseSubstraitPlan(
+    JNIEnv* env, jbyteArray exprs_arr, gandiva::ExpressionVector* expr_vector,
+    gandiva::FieldVector* ret_types,
+    std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out_iter) {
+  io::substrait::Plan ws_plan;
+  jsize exprs_len = env->GetArrayLength(exprs_arr);
+  jbyte* exprs_bytes = env->GetByteArrayElements(exprs_arr, 0);
+
+  if (!ParseProtobuf(reinterpret_cast<uint8_t*>(exprs_bytes), exprs_len, &ws_plan)) {
+    env->ReleaseByteArrayElements(exprs_arr, exprs_bytes, JNI_ABORT);
+    return arrow::Status::UnknownError("Unable to parse");
+  }
+  std::cout << "start to parse to plan" << std::endl;
+  auto parser = std::make_shared<SubstraitParser>();
+  parser->ParsePlan(ws_plan);
+  std::cout << "finish to parse to plan" << std::endl;
+  *out_iter = parser->getResIter();
   return arrow::Status::OK();
 }
 

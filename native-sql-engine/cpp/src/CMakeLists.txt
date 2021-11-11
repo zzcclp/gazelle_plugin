@@ -407,14 +407,53 @@ file(MAKE_DIRECTORY ${root_directory}/src/proto)
 set(PROTO_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/proto")
 set(PROTO_OUTPUT_FILES "${PROTO_OUTPUT_DIR}/Exprs.pb.cc")
 set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/Exprs.pb.h")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/expression.pb.cc")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/expression.pb.h")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/extensions.pb.cc")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/extensions.pb.h")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/function.pb.cc")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/function.pb.h")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/parameterized_types.pb.cc")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/parameterized_types.pb.h")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/plan.pb.cc")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/plan.pb.h")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/relations.pb.cc")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/relations.pb.h")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/selection.pb.cc")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/selection.pb.h")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/type_expressions.pb.cc")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/type_expressions.pb.h")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/type.pb.cc")
+set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/type.pb.h")
 
 set_source_files_properties(${PROTO_OUTPUT_FILES} PROPERTIES GENERATED TRUE)
 
-get_filename_component(ABS_GANDIVA_PROTO ${CMAKE_CURRENT_SOURCE_DIR}/proto/Exprs.proto
-                       ABSOLUTE)
+get_filename_component(ABS_GANDIVA_PROTO ${CMAKE_CURRENT_SOURCE_DIR}/proto/,
+                       DIRECTORY)
+# get_filename_component(ABS_GANDIVA_PROTO ${CMAKE_CURRENT_SOURCE_DIR}/proto/expression.proto
+#                        ABSOLUTE)
 
 set(PROTO_SRCS "${PROTO_OUTPUT_DIR}/Exprs.pb.cc")
+set(PROTO_SRCS ${PROTO_SRCS} "${PROTO_OUTPUT_DIR}/expression.pb.cc")
+set(PROTO_SRCS ${PROTO_SRCS} "${PROTO_OUTPUT_DIR}/extensions.pb.cc")
+set(PROTO_SRCS ${PROTO_SRCS} "${PROTO_OUTPUT_DIR}/function.pb.cc")
+set(PROTO_SRCS ${PROTO_SRCS} "${PROTO_OUTPUT_DIR}/parameterized_types.pb.cc")
+set(PROTO_SRCS ${PROTO_SRCS} "${PROTO_OUTPUT_DIR}/plan.pb.cc")
+set(PROTO_SRCS ${PROTO_SRCS} "${PROTO_OUTPUT_DIR}/relations.pb.cc")
+set(PROTO_SRCS ${PROTO_SRCS} "${PROTO_OUTPUT_DIR}/selection.pb.cc")
+set(PROTO_SRCS ${PROTO_SRCS} "${PROTO_OUTPUT_DIR}/type_expressions.pb.cc")
+set(PROTO_SRCS ${PROTO_SRCS} "${PROTO_OUTPUT_DIR}/type.pb.cc")
+
 set(PROTO_HDRS "${PROTO_OUTPUT_DIR}/Exprs.pb.h")
+set(PROTO_HDRS ${PROTO_HDRS} "${PROTO_OUTPUT_DIR}/expression.pb.h")
+set(PROTO_HDRS ${PROTO_HDRS} "${PROTO_OUTPUT_DIR}/extensions.pb.h")
+set(PROTO_HDRS ${PROTO_HDRS} "${PROTO_OUTPUT_DIR}/function.pb.h")
+set(PROTO_HDRS ${PROTO_HDRS} "${PROTO_OUTPUT_DIR}/parameterized_types.pb.h")
+set(PROTO_HDRS ${PROTO_HDRS} "${PROTO_OUTPUT_DIR}/plan.pb.h")
+set(PROTO_HDRS ${PROTO_HDRS} "${PROTO_OUTPUT_DIR}/relations.pb.h")
+set(PROTO_HDRS ${PROTO_HDRS} "${PROTO_OUTPUT_DIR}/selection.pb.h")
+set(PROTO_HDRS ${PROTO_HDRS} "${PROTO_OUTPUT_DIR}/type_expressions.pb.h")
+set(PROTO_HDRS ${PROTO_HDRS} "${PROTO_OUTPUT_DIR}/type.pb.h")
 
 if(TESTS)
   find_package(GTest)
@@ -485,6 +524,7 @@ set(SPARK_COLUMNAR_PLUGIN_SRCS
         jni/jni_wrapper.cc
         ${PROTO_SRCS}
         proto/protobuf_utils.cc
+        proto/substrait_utils.cc
         codegen/common/relation.cc
         codegen/expr_visitor.cc
         codegen/arrow_compute/expr_visitor.cc
@@ -546,6 +586,15 @@ add_custom_command(OUTPUT ${PROTO_OUTPUT_FILES}
                            --cpp_out
                            ${PROTO_OUTPUT_DIR}
                            ${CMAKE_CURRENT_SOURCE_DIR}/proto/Exprs.proto
+                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/expression.proto
+                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/extensions.proto
+                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/function.proto
+                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/parameterized_types.proto
+                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/plan.proto
+                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/relations.proto
+                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/selection.proto
+                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/type_expressions.proto
+                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/type.proto
                    DEPENDS  ${ABS_GANDIVA_PROTO}
                    COMMENT "Running PROTO compiler on Exprs.proto"
                    VERBATIM)

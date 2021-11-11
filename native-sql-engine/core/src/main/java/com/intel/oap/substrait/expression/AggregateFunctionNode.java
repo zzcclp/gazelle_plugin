@@ -62,7 +62,9 @@ public class AggregateFunctionNode {
             funcIdBuilder.setId(functionId.longValue());
             aggBuilder.setId(funcIdBuilder.build());
         }
-        if (phase != null) {
+        if (phase == null) {
+            aggBuilder.setPhase(Expression.AggregationPhase.UNKNOWN);
+        } else {
             switch(phase) {
                 case "PARTIAL":
                     aggBuilder.setPhase(Expression.AggregationPhase.INITIAL_TO_INTERMEDIATE);
@@ -74,7 +76,7 @@ public class AggregateFunctionNode {
                     aggBuilder.setPhase(Expression.AggregationPhase.INTERMEDIATE_TO_RESULT);
                     break;
                 default:
-                    System.out.println("Not supported.");
+                    aggBuilder.setPhase(Expression.AggregationPhase.UNKNOWN);
             }
         }
         for (ExpressionNode expressionNode : expressionNodes) {

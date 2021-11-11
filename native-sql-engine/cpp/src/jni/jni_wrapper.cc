@@ -633,68 +633,72 @@ Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeCreateKernelWi
   // Get the ws iter
   gandiva::ExpressionVector ws_expr_vector;
   gandiva::FieldVector ws_ret_types;
-  msg = MakeExprVector(env, ws_exprs_arr, &ws_expr_vector, &ws_ret_types);
+  std::cout << "start to parse" << std::endl;
+  std::shared_ptr<ResultIterator<arrow::RecordBatch>> res_iter;
+  msg = ParseSubstraitPlan(env, ws_exprs_arr, &ws_expr_vector, &ws_ret_types, &res_iter);
   if (!msg.ok()) {
     std::string error_message =
         "failed to parse expressions protobuf, err msg is " + msg.message();
     env->ThrowNew(io_exception_class, error_message.c_str());
   }
-  if (ws_res_schema_arr != nullptr) {
-    std::shared_ptr<arrow::Schema> ws_res_schema;
-    msg = MakeSchema(env, ws_res_schema_arr, &ws_res_schema);
-    if (!msg.ok()) {
-      std::string error_message = "failed to readSchema, err msg is " + msg.message();
-      env->ThrowNew(io_exception_class, error_message.c_str());
-    }
-    ws_ret_types = ws_res_schema->fields();
-  }
-  std::shared_ptr<CodeGenerator> ws_handler;
-  try {
-    arrow::MemoryPool* pool = reinterpret_cast<arrow::MemoryPool*>(memory_pool_id);
-    if (pool == nullptr) {
-      env->ThrowNew(illegal_argument_exception_class,
-                    "Memory pool does not exist or has been closed");
-      return -1;
-    }
-    msg = sparkcolumnarplugin::codegen::CreateCodeGenerator(
-        pool, ws_in_schema, ws_expr_vector, ws_ret_types, &ws_handler,
-        return_when_finish);
-  } catch (const std::runtime_error& error) {
-    env->ThrowNew(unsupportedoperation_exception_class, error.what());
-  } catch (const std::exception& error) {
-    env->ThrowNew(io_exception_class, error.what());
-  }
-  if (!msg.ok()) {
-    std::string error_message =
-        "nativeCreateKernelWithIterator: failed to create CodeGenerator, err msg is " +
-        msg.message();
-    env->ThrowNew(io_exception_class, error_message.c_str());
-  }
-  std::shared_ptr<ResultIteratorBase> ws_result_iterator;
-  msg = ws_handler->finish(&ws_result_iterator);
-  // Set dependencies
-  int ids_size = env->GetArrayLength(dep_ids);
-  long* ids_data = env->GetLongArrayElements(dep_ids, 0);
-  std::vector<std::shared_ptr<ResultIteratorBase>> dep_iter_list;
-  // Set the input iter as dependency
-  dep_iter_list.push_back(in_result_iterator);
-  // Set other dependencies
-  for (int i = 0; i < ids_size; i++) {
-    auto iter = GetBatchIterator(env, ids_data[i]);
-    dep_iter_list.push_back(iter);
-  }
-  auto typed_result_iterator =
-      std::dynamic_pointer_cast<ResultIterator<arrow::RecordBatch>>(ws_result_iterator);
-  msg = typed_result_iterator->SetDependencies(dep_iter_list);
-  if (!msg.ok()) {
-    std::string error_message =
-        "nativeCreateKernelWithIterator: Error "
-        "msg " +
-        msg.ToString();
-    env->ThrowNew(io_exception_class, error_message.c_str());
-  }
-  // Handle release
-  env->ReleaseLongArrayElements(dep_ids, ids_data, JNI_ABORT);
+  auto ws_result_iterator = std::dynamic_pointer_cast<ResultIteratorBase>(res_iter);
+
+  // if (ws_res_schema_arr != nullptr) {
+  //   std::shared_ptr<arrow::Schema> ws_res_schema;
+  //   msg = MakeSchema(env, ws_res_schema_arr, &ws_res_schema);
+  //   if (!msg.ok()) {
+  //     std::string error_message = "failed to readSchema, err msg is " + msg.message();
+  //     env->ThrowNew(io_exception_class, error_message.c_str());
+  //   }
+  //   ws_ret_types = ws_res_schema->fields();
+  // }
+  // std::shared_ptr<CodeGenerator> ws_handler;
+  // try {
+  //   arrow::MemoryPool* pool = reinterpret_cast<arrow::MemoryPool*>(memory_pool_id);
+  //   if (pool == nullptr) {
+  //     env->ThrowNew(illegal_argument_exception_class,
+  //                   "Memory pool does not exist or has been closed");
+  //     return -1;
+  //   }
+  //   msg = sparkcolumnarplugin::codegen::CreateCodeGenerator(
+  //       pool, ws_in_schema, ws_expr_vector, ws_ret_types, &ws_handler,
+  //       return_when_finish);
+  // } catch (const std::runtime_error& error) {
+  //   env->ThrowNew(unsupportedoperation_exception_class, error.what());
+  // } catch (const std::exception& error) {
+  //   env->ThrowNew(io_exception_class, error.what());
+  // }
+  // if (!msg.ok()) {
+  //   std::string error_message =
+  //       "nativeCreateKernelWithIterator: failed to create CodeGenerator, err msg is " +
+  //       msg.message();
+  //   env->ThrowNew(io_exception_class, error_message.c_str());
+  // }
+  // std::shared_ptr<ResultIteratorBase> ws_result_iterator;
+  // msg = ws_handler->finish(&ws_result_iterator);
+  // // Set dependencies
+  // int ids_size = env->GetArrayLength(dep_ids);
+  // long* ids_data = env->GetLongArrayElements(dep_ids, 0);
+  // std::vector<std::shared_ptr<ResultIteratorBase>> dep_iter_list;
+  // // Set the input iter as dependency
+  // dep_iter_list.push_back(in_result_iterator);
+  // // Set other dependencies
+  // for (int i = 0; i < ids_size; i++) {
+  //   auto iter = GetBatchIterator(env, ids_data[i]);
+  //   dep_iter_list.push_back(iter);
+  // }
+  // auto typed_result_iterator =
+  //     std::dynamic_pointer_cast<ResultIterator<arrow::RecordBatch>>(ws_result_iterator);
+  // msg = typed_result_iterator->SetDependencies(dep_iter_list);
+  // if (!msg.ok()) {
+  //   std::string error_message =
+  //       "nativeCreateKernelWithIterator: Error "
+  //       "msg " +
+  //       msg.ToString();
+  //   env->ThrowNew(io_exception_class, error_message.c_str());
+  // }
+  // // Handle release
+  // env->ReleaseLongArrayElements(dep_ids, ids_data, JNI_ABORT);
   return batch_iterator_holder_.Insert(std::move(ws_result_iterator));
 }
 
