@@ -36,7 +36,8 @@ import org.apache.arrow.gandiva.expression._
 import org.apache.arrow.vector.types.pojo.ArrowType
 import com.google.common.collect.Lists
 import com.intel.oap.GazellePluginConfig
-import com.intel.oap.substrait.rel.RelNode
+import com.intel.oap.substrait.expression.ExpressionNode
+import com.intel.oap.substrait.rel.{RelBuilder, RelNode}
 import org.apache.spark.sql.execution.datasources.v2.arrow.SparkMemoryUtils;
 
 case class ConditionProjectExecTransformer(
@@ -49,11 +50,9 @@ case class ConditionProjectExecTransformer(
     with AliasAwareOutputPartitioning
     with Logging {
 
-  val numaBindingInfo = GazellePluginConfig.getConf.numaBindingInfo
-
   val sparkConf: SparkConf = sparkContext.getConf
 
-  override def supportsColumnar = true
+  override def supportsColumnar: Boolean = true
 
   override lazy val metrics = Map(
     "numOutputRows" -> SQLMetrics.createMetric(sparkContext, "number of output rows"),
@@ -134,8 +133,7 @@ case class ConditionProjectExecTransformer(
   // override def canEqual(that: Any): Boolean = false
 
   def getRelNode(args: java.lang.Object, childRel: RelNode): RelNode = {
-    ColumnarConditionProjector.prepareCondProjectRel(
-      args, condition, projectList, child.output, childRel)
+    prepareCondProjectRel(args, condition, projectList, child.output, childRel)
   }
 
   override def doTransform(args: java.lang.Object): TransformContext = {
@@ -163,57 +161,57 @@ case class ConditionProjectExecTransformer(
     throw new UnsupportedOperationException(s"This operator doesn't support doExecute().")
   }
 
-  ColumnarConditionProjector.prebuild(condition, projectList, child.output)
-
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
-    val numOutputRows = longMetric("numOutputRows")
-    val numOutputBatches = longMetric("numOutputBatches")
-    val numInputBatches = longMetric("numInputBatches")
-    val procTime = longMetric("processTime")
-    numOutputRows.set(0)
-    numOutputBatches.set(0)
-    numInputBatches.set(0)
+    throw new UnsupportedOperationException(s"This operator doesn't support doExecuteColumnar().")
+  }
 
-    child.executeColumnar().mapPartitions { iter =>
-      GazellePluginConfig.getConf
-      ExecutorManager.tryTaskSet(numaBindingInfo)
-      val condProj = ColumnarConditionProjector.create(
-        condition,
-        projectList,
-        child.output,
-        numInputBatches,
-        numOutputBatches,
-        numOutputRows,
-        procTime)
-      SparkMemoryUtils.addLeakSafeTaskCompletionListener[Unit]((tc: TaskContext) => {
-        condProj.close()
+  def prepareCondProjectRel(args: java.lang.Object,
+                            condExpr: Expression,
+                            projectList: Seq[NamedExpression],
+                            originalInputAttributes: Seq[Attribute],
+                            input: RelNode): RelNode = {
+    val typeNodes = ConverterUtils.getTypeNodeFromAttributes(originalInputAttributes)
+    val filterNode = if (condExpr != null) {
+      val columnarCondExpr: Expression = ColumnarExpressionConverter
+        .replaceWithColumnarExpression(condExpr, attributeSeq = originalInputAttributes)
+      val condExprNode =
+        columnarCondExpr.asInstanceOf[ExpressionTransformer].doTransform(args)
+      RelBuilder.makeFilterRel(input, condExprNode, typeNodes)
+    } else {
+      null
+    }
+    val projectRel = if (projectList != null && projectList.nonEmpty) {
+      val columnarProjExprs: Seq[Expression] = projectList.map(expr => {
+        ColumnarExpressionConverter
+          .replaceWithColumnarExpression(expr, attributeSeq = originalInputAttributes)
       })
-      new CloseableColumnBatchIterator(condProj.createIterator(iter))
+      val projExprNodeList = new java.util.ArrayList[ExpressionNode]()
+      for (expr <- columnarProjExprs) {
+        projExprNodeList.add(expr.asInstanceOf[ExpressionTransformer].doTransform(args))
+      }
+      if (filterNode != null) {
+        // The result of Filter will be the input of Project
+        RelBuilder.makeProjectRel(filterNode, projExprNodeList, typeNodes)
+      } else {
+        // The original input will be the input of Project.
+        RelBuilder.makeProjectRel(input, projExprNodeList, typeNodes)
+      }
+    } else {
+      null
+    }
+    if (projectRel == null) {
+      filterNode
+    } else {
+      projectRel
     }
   }
 }
 
-case class ColumnarUnionExec(children: Seq[SparkPlan]) extends SparkPlan {
-  // updating nullability to make all the children consistent
-
-  buildCheck()
-
-  def buildCheck(): Unit = {
-    for (child <- children) {
-      for (schema <- child.schema) {
-        try {
-          ConverterUtils.checkIfTypeSupported(schema.dataType)
-        } catch {
-          case e: UnsupportedOperationException =>
-            throw new UnsupportedOperationException(
-              s"${schema.dataType} is not supported in ColumnarUnionExec")
-        }
-      }
-    }
+case class UnionExecTransformer(children: Seq[SparkPlan]) extends SparkPlan with TransformSupport {
+  override def supportsColumnar: Boolean = true
+  protected override def doExecuteColumnar(): RDD[ColumnarBatch] = {
+    throw new UnsupportedOperationException(s"This operator doesn't support doExecuteColumnar().")
   }
-  override def supportsColumnar = true
-  protected override def doExecuteColumnar(): RDD[ColumnarBatch] =
-    sparkContext.union(children.map(_.executeColumnar()))
   override def output: Seq[Attribute] = {
     children.map(_.output).transpose.map { attrs =>
       val firstAttr = attrs.head
@@ -231,5 +229,27 @@ case class ColumnarUnionExec(children: Seq[SparkPlan]) extends SparkPlan {
   protected override def doExecute()
       : org.apache.spark.rdd.RDD[org.apache.spark.sql.catalyst.InternalRow] = {
     throw new UnsupportedOperationException(s"This operator doesn't support doExecute().")
+  }
+
+  override def inputRDDs: Seq[RDD[ColumnarBatch]] = {
+    throw new UnsupportedOperationException(s"This operator doesn't support inputRDDs.")
+  }
+
+  override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = {
+    throw new UnsupportedOperationException(s"This operator doesn't support getBuildPlans.")
+  }
+
+  override def getStreamedLeafPlan: SparkPlan = {
+    throw new UnsupportedOperationException(s"This operator doesn't support getStreamedLeafPlan.")
+  }
+
+  override def getChild: SparkPlan = {
+    throw new UnsupportedOperationException(s"This operator doesn't support getChild.")
+  }
+
+  override def doValidate: Boolean = false
+
+  override def doTransform(args: Object): TransformContext = {
+    throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")
   }
 }

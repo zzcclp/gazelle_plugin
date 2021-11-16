@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.types._
 
 import scala.collection.mutable.ListBuffer
-import com.intel.oap.expression.ColumnarDateTimeExpressions.{DateDiffTransformer, UnixTimestampTransformer}
+import com.intel.oap.expression.DateTimeExpressionsTransformer.{DateDiffTransformer, UnixTimestampTransformer}
 import com.intel.oap.substrait.expression.ExpressionNode
 
 /**
