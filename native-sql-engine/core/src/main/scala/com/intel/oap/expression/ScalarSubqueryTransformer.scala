@@ -18,39 +18,38 @@
 package com.intel.oap.expression
 
 import com.google.common.collect.Lists
-import com.intel.oap.substrait.expression.{ExpressionBuilder, ExpressionNode}
+import com.intel.oap.substrait.expression.ExpressionNode
 import org.apache.arrow.gandiva.evaluator._
 import org.apache.arrow.gandiva.exceptions.GandivaException
 import org.apache.arrow.gandiva.expression._
-import org.apache.arrow.vector.types.IntervalUnit
+import org.apache.arrow.vector.types.DateUnit
 import org.apache.arrow.vector.types.pojo.ArrowType
 import org.apache.arrow.vector.types.pojo.Field
-import org.apache.arrow.vector.types.DateUnit
-import org.apache.spark.unsafe.types.CalendarInterval
-import org.apache.spark.sql.types.CalendarIntervalType
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.catalyst.{InternalRow, expressions}
+import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, ExprCode}
+import org.apache.spark.sql.execution.BaseSubqueryExec
+import org.apache.spark.sql.execution.ExecSubqueryExpression
+import org.apache.spark.sql.execution.ScalarSubquery
 import org.apache.spark.sql.types._
 
 import scala.collection.mutable.ListBuffer
 
-class LiteralTransformer(lit: Literal)
-    extends Literal(lit.value, lit.dataType)
-    with ExpressionTransformer {
+class ScalarSubqueryTransformer(
+  query: ScalarSubquery)
+  extends Expression with ExpressionTransformer {
+  override def dataType: DataType = query.dataType
+  override def children: Seq[Expression] = Nil
+  override def nullable: Boolean = true
+  override def toString: String = query.toString
+  override def eval(input: InternalRow): Any = query.eval(input)
+  override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = query.doGenCode(ctx, ev)
+  override def canEqual(that: Any): Boolean = query.canEqual(that)
+  override def productArity: Int = query.productArity
+  override def productElement(n: Int): Any = query.productElement(n)
   override def doValidate(): Boolean = {
-    true
+    false
   }
-  override def doTransform(args: java.lang.Object): ExpressionNode = {
-    dataType match {
-      case t: DoubleType =>
-        value match {
-          case null =>
-            throw new UnsupportedOperationException(s"null is not supported")
-          case _ =>
-            ExpressionBuilder.makeLiteral(value.asInstanceOf[java.lang.Double])
-        }
-      case other =>
-        throw new UnsupportedOperationException(s"$other is not supported")
-    }
-  }
+  override def doTransform(args: java.lang.Object): ExpressionNode = null
 }

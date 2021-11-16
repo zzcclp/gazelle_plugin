@@ -18,39 +18,35 @@
 package com.intel.oap.expression
 
 import com.google.common.collect.Lists
-import com.intel.oap.substrait.expression.{ExpressionBuilder, ExpressionNode}
+import com.google.common.collect.Sets
+import com.intel.oap.substrait.expression.ExpressionNode
 import org.apache.arrow.gandiva.evaluator._
 import org.apache.arrow.gandiva.exceptions.GandivaException
 import org.apache.arrow.gandiva.expression._
-import org.apache.arrow.vector.types.IntervalUnit
 import org.apache.arrow.vector.types.pojo.ArrowType
 import org.apache.arrow.vector.types.pojo.Field
-import org.apache.arrow.vector.types.DateUnit
-import org.apache.spark.unsafe.types.CalendarInterval
-import org.apache.spark.sql.types.CalendarIntervalType
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types._
 
-import scala.collection.mutable.ListBuffer
-
-class LiteralTransformer(lit: Literal)
-    extends Literal(lit.value, lit.dataType)
-    with ExpressionTransformer {
+class IfTransformer(predicate: Expression, trueValue: Expression,
+                 falseValue: Expression, original: Expression)
+    extends If(predicate: Expression, trueValue: Expression, falseValue: Expression)
+    with ExpressionTransformer
+    with Logging {
   override def doValidate(): Boolean = {
-    true
+    false
   }
-  override def doTransform(args: java.lang.Object): ExpressionNode = {
-    dataType match {
-      case t: DoubleType =>
-        value match {
-          case null =>
-            throw new UnsupportedOperationException(s"null is not supported")
-          case _ =>
-            ExpressionBuilder.makeLiteral(value.asInstanceOf[java.lang.Double])
-        }
-      case other =>
-        throw new UnsupportedOperationException(s"$other is not supported")
-    }
+  override def doTransform(args: java.lang.Object): ExpressionNode = null
+}
+
+object IfOperatorTransformer {
+
+  def create(predicate: Expression, trueValue: Expression,
+             falseValue: Expression, original: Expression): Expression = original match {
+    case i: If =>
+      new IfTransformer(predicate, trueValue, falseValue, original)
+    case other =>
+      throw new UnsupportedOperationException(s"not currently supported: $other.")
   }
 }

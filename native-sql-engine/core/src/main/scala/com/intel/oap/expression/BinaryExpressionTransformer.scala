@@ -18,39 +18,46 @@
 package com.intel.oap.expression
 
 import com.google.common.collect.Lists
-import com.intel.oap.substrait.expression.{ExpressionBuilder, ExpressionNode}
 import org.apache.arrow.gandiva.evaluator._
 import org.apache.arrow.gandiva.exceptions.GandivaException
 import org.apache.arrow.gandiva.expression._
-import org.apache.arrow.vector.types.IntervalUnit
 import org.apache.arrow.vector.types.pojo.ArrowType
 import org.apache.arrow.vector.types.pojo.Field
+import org.apache.arrow.vector.types.IntervalUnit
 import org.apache.arrow.vector.types.DateUnit
-import org.apache.spark.unsafe.types.CalendarInterval
-import org.apache.spark.sql.types.CalendarIntervalType
+import org.apache.arrow.vector.types.pojo.ArrowType.ArrowTypeID
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.types._
 
 import scala.collection.mutable.ListBuffer
+import com.intel.oap.expression.ColumnarDateTimeExpressions.{DateDiffTransformer, UnixTimestampTransformer}
+import com.intel.oap.substrait.expression.ExpressionNode
 
-class LiteralTransformer(lit: Literal)
-    extends Literal(lit.value, lit.dataType)
-    with ExpressionTransformer {
+/**
+ * A version of add that supports columnar processing for longs.
+ */
+class DateAddIntervalTransformer(start: Expression, interval: Expression, original: DateAddInterval)
+    extends DateAddInterval(start, interval, original.timeZoneId, original.ansiEnabled)
+    with ExpressionTransformer
+    with Logging {
   override def doValidate(): Boolean = {
-    true
+    false
   }
-  override def doTransform(args: java.lang.Object): ExpressionNode = {
-    dataType match {
-      case t: DoubleType =>
-        value match {
-          case null =>
-            throw new UnsupportedOperationException(s"null is not supported")
-          case _ =>
-            ExpressionBuilder.makeLiteral(value.asInstanceOf[java.lang.Double])
-        }
+  override def doTransform(args: java.lang.Object): ExpressionNode = null
+}
+
+object BinaryExpressionTransformer {
+
+  def create(left: Expression, right: Expression, original: Expression): Expression =
+    original match {
+      case s: DateAddInterval =>
+        new DateAddIntervalTransformer(left, right, s)
+      case s: DateDiff =>
+        new DateDiffTransformer(left, right)
+      case a: UnixTimestamp =>
+        new UnixTimestampTransformer(left, right)
       case other =>
-        throw new UnsupportedOperationException(s"$other is not supported")
+        throw new UnsupportedOperationException(s"not currently supported: $other.")
     }
-  }
 }
