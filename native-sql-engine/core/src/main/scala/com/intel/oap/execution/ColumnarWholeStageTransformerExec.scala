@@ -43,24 +43,15 @@ import org.apache.spark.util.{ExecutorManager, UserAddedJarUtils}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
-// FIXME
-case class TransformGandivaContext(inputSchema: Schema, outputSchema: Schema, root: TreeNode) {}
-
 case class TransformContext(inputSchema: Schema, outputSchema: Schema, root: RelNode) {}
 
 case class WholestageTransformContext(inputSchema: Schema, outputSchema: Schema, root: PlanNode) {}
 
 trait TransformSupport extends SparkPlan {
-
-  /**
-   * Whether this SparkPlan supports to be transformed into substrait node.
-   */
-  def supportTransform: Boolean = false
-
   /**
    * Validate whether this SparkPlan supports to be transformed into substrait node in Native Code.
    */
-  def doValidate: Boolean = false
+  def doValidate(): Boolean = false
 
   /**
    * Returns all the RDDs of ColumnarBatch which generates the input rows.
@@ -79,11 +70,7 @@ trait TransformSupport extends SparkPlan {
 
   def dependentPlanCtx: TransformContext = null
 
-  // FIXME
-  def dependentGandivaPlanCtx: TransformGandivaContext = null
-
   def updateMetrics(out_num_rows: Long, process_time: Long): Unit = {}
-
 }
 
 case class WholeStageTransformer(child: SparkPlan)(val transformStageId: Int)

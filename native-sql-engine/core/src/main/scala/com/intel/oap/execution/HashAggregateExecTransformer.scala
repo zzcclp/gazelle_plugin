@@ -112,7 +112,7 @@ case class HashAggregateExecTransformer(
   numOutputBatches.set(0)
   numInputBatches.set(0)
 
-  override def doValidate: Boolean = {
+  override def doValidate(): Boolean = {
     true
   }
 

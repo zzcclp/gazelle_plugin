@@ -60,7 +60,7 @@ case class ConditionProjectExecTransformer(
     "numInputBatches" -> SQLMetrics.createMetric(sparkContext, "input_batches"),
     "processTime" -> SQLMetrics.createTimingMetric(sparkContext, "totaltime_condproject"))
 
-  override def doValidate: Boolean = {
+  override def doValidate(): Boolean = {
     true
   }
 
@@ -247,7 +247,7 @@ case class UnionExecTransformer(children: Seq[SparkPlan]) extends SparkPlan with
     throw new UnsupportedOperationException(s"This operator doesn't support getChild.")
   }
 
-  override def doValidate: Boolean = false
+  override def doValidate(): Boolean = false
 
   override def doTransform(args: Object): TransformContext = {
     throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")

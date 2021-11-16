@@ -58,7 +58,7 @@ import org.apache.spark.sql.types.DecimalType
 /**
  * Performs a hash join of two child relations by first shuffling the data using the join keys.
  */
-case class ColumnarSortMergeJoinExec(
+case class SortMergeJoinExecTransformer(
     leftKeys: Seq[Expression],
     rightKeys: Seq[Expression],
     joinType: JoinType,
@@ -87,9 +87,7 @@ case class ColumnarSortMergeJoinExec(
   val totaltime_sortmegejoin = longMetric("totaltime_sortmergejoin")
   val resultSchema = this.schema
 
-  buildCheck()
-
-  override def supportsColumnar = true
+  override def supportsColumnar: Boolean = true
 
   override protected def doExecute(): RDD[InternalRow] = {
     throw new UnsupportedOperationException(
@@ -119,8 +117,9 @@ case class ColumnarSortMergeJoinExec(
   }
 
   override def output: Seq[Attribute] = {
-    if (projectList != null && !projectList.isEmpty)
+    if (projectList != null && projectList.nonEmpty) {
       return projectList.map(_.toAttribute)
+    }
     joinType match {
       case _: InnerLike =>
         left.output ++ right.output
@@ -218,56 +217,37 @@ case class ColumnarSortMergeJoinExec(
       (rightKeys, leftKeys, right, left)
     case _ =>
       left match {
-        case p: ColumnarSortMergeJoinExec =>
+        case p: SortMergeJoinExecTransformer =>
           (rightKeys, leftKeys, right, left)
-        case ConditionProjectExecTransformer(_, _, child: ColumnarSortMergeJoinExec) =>
+        case ConditionProjectExecTransformer(_, _, child: SortMergeJoinExecTransformer) =>
           (rightKeys, leftKeys, right, left)
         case other =>
           (leftKeys, rightKeys, left, right)
       }
   }
 
-  /*****************  WSCG related function ******************/
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = streamedPlan match {
-    case c: TransformSupport if c.supportTransform =>
+    case c: TransformSupport =>
       c.inputRDDs
     case _ =>
       Seq(streamedPlan.executeColumnar())
   }
 
-  override def supportTransform: Boolean = false
-
-  val output_skip_alias =
-    if (projectList == null || projectList.isEmpty) output
-    else projectList.map(expr => ConverterUtils.getAttrFromExpr(expr, true))
-
-  def getKernelFunction: TreeNode = {
-    ColumnarSortMergeJoin.prepareKernelFunction(
-      buildKeys,
-      streamedKeys,
-      buildPlan.output,
-      streamedPlan.output,
-      output_skip_alias,
-      joinType,
-      condition)
-  }
-
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = {
 
     val curBuildPlan: Seq[(SparkPlan, SparkPlan)] = buildPlan match {
-      case s: ColumnarSortExec =>
+      case s: SortExecTransformer =>
         Seq((s, this))
-      case c: TransformSupport
-          if !c.isInstanceOf[ColumnarSortExec] && c.supportTransform =>
+      case c: TransformSupport if !c.isInstanceOf[SortExecTransformer] =>
         c.getBuildPlans
       case other =>
-        /* should be ColumnarInputAdapter or others */
+        /* should be InputAdapterTransformer or others */
         Seq((other, this))
     }
     streamedPlan match {
-      case c: TransformSupport if c.isInstanceOf[ColumnarSortExec] =>
+      case c: TransformSupport if c.isInstanceOf[SortExecTransformer] =>
         curBuildPlan ++ Seq((c, this))
-      case c: TransformSupport if !c.isInstanceOf[ColumnarSortExec] =>
+      case c: TransformSupport if !c.isInstanceOf[SortExecTransformer] =>
         c.getBuildPlans ++ curBuildPlan
       case _ =>
         curBuildPlan
@@ -275,7 +255,7 @@ case class ColumnarSortMergeJoinExec(
   }
 
   override def getStreamedLeafPlan: SparkPlan = streamedPlan match {
-    case c: TransformSupport if c.supportTransform =>
+    case c: TransformSupport =>
       c.getStreamedLeafPlan
     case _ =>
       this
@@ -290,174 +270,13 @@ case class ColumnarSortMergeJoinExec(
 
   override def getChild: SparkPlan = streamedPlan
 
-//  override def doTransform: TransformContext = {
-//    val childCtx = streamedPlan match {
-//      case c: TransformSupport if c.supportTransform =>
-//        c.doTransform
-//      case _ =>
-//        null
-//    }
-//    val outputSchema = ConverterUtils.toArrowSchema(output_skip_alias)
-//    val (codeGenNode, inputSchema) = if (childCtx != null) {
-//      (
-//        TreeBuilder.makeFunction(
-//          s"child",
-//          Lists.newArrayList(getKernelFunction, childCtx.root),
-//          new ArrowType.Int(32, true)),
-//        childCtx.inputSchema)
-//    } else {
-//      (
-//        TreeBuilder.makeFunction(
-//          s"child",
-//          Lists.newArrayList(getKernelFunction),
-//          new ArrowType.Int(32, true)),
-//        new Schema(Lists.newArrayList()))
-//    }
-//    TransformContext(inputSchema, outputSchema, codeGenNode)
-//  }
-  //do not call prebuild so we could skip the c++ codegen
-  //val triggerBuildSignature = getCodeGenSignature
+  override def doValidate(): Boolean = false
 
-  /*try {
-    ColumnarSortMergeJoin.precheck(
-      leftKeys,
-      rightKeys,
-      resultSchema,
-      joinType,
-      condition,
-      left,
-      right,
-      joinTime,
-      prepareTime,
-      totaltime_sortmegejoin,
-      numOutputRows,
-      sparkConf)
-  } catch {
-    case e: Throwable =>
-      throw e
-  }*/
-
-  override def doTransform(args: java.lang.Object): TransformContext = null
-
-  def buildCheck(): Unit = {
-    joinType match {
-      case _: InnerLike =>
-      case LeftSemi | LeftOuter | RightOuter | LeftAnti =>
-      case j: ExistenceJoin =>
-      case _ =>
-        throw new UnsupportedOperationException(s"Join Type ${joinType} is not supported yet.")
-    }
-    // build check for condition
-    val conditionExpr: Expression = condition.orNull
-    if (conditionExpr != null) {
-      ColumnarExpressionConverter.replaceWithColumnarExpression(conditionExpr)
-    }
-    // build check types
-    for (attr <- left.output) {
-      try {
-        ConverterUtils.checkIfTypeSupported(attr.dataType)
-      } catch {
-        case e: UnsupportedOperationException =>
-          throw new UnsupportedOperationException(
-            s"${attr.dataType} is not supported in ColumnarSortMergeJoinExec.")
-      }
-    }
-    for (attr <- right.output) {
-      try {
-        ConverterUtils.checkIfTypeSupported(attr.dataType)
-      } catch {
-        case e: UnsupportedOperationException =>
-          throw new UnsupportedOperationException(
-            s"${attr.dataType} is not supported in ColumnarSortMergeJoinExec.")
-      }
-    }
-    // build check for expr
-    if (leftKeys != null) {
-      for (expr <- leftKeys) {
-        ColumnarExpressionConverter.replaceWithColumnarExpression(expr)
-      }
-    }
-    if (rightKeys != null) {
-      for (expr <- rightKeys) {
-        ColumnarExpressionConverter.replaceWithColumnarExpression(expr)
-      }
-    }
+  override def doTransform(args: java.lang.Object): TransformContext = {
+    throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")
   }
 
-  /***********************************************************/
-  def getCodeGenSignature: String =
-    if (resultSchema.size > 0) {
-      try {
-        ColumnarSortMergeJoin.prebuild(
-          leftKeys,
-          rightKeys,
-          resultSchema,
-          joinType,
-          condition,
-          left,
-          right,
-          joinTime,
-          prepareTime,
-          totaltime_sortmegejoin,
-          numOutputRows,
-          sparkConf)
-      } catch {
-        case e: Throwable =>
-          throw e
-      }
-    } else {
-      ""
-    }
-
-  def uploadAndListJars(signature: String) =
-    if (signature != "") {
-      if (sparkContext.listJars.filter(path => path.contains(s"${signature}.jar")).isEmpty) {
-        val tempDir = GazellePluginConfig.getRandomTempDir
-        val jarFileName =
-          s"${tempDir}/tmp/spark-columnar-plugin-codegen-precompile-${signature}.jar"
-        sparkContext.addJar(jarFileName)
-      }
-      sparkContext.listJars.filter(path => path.contains(s"${signature}.jar"))
-    } else {
-      List()
-    }
-
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
-    val signature = getCodeGenSignature
-    val listJars = uploadAndListJars(signature)
-    right.executeColumnar().zipPartitions(left.executeColumnar()) { (streamIter, buildIter) =>
-      GazellePluginConfig.getConf
-      val execTempDir = GazellePluginConfig.getTempFile
-      val jarList = listJars.map(jarUrl => {
-        logWarning(s"Get Codegened library Jar ${jarUrl}")
-        UserAddedJarUtils.fetchJarFromSpark(
-          jarUrl,
-          execTempDir,
-          s"spark-columnar-plugin-codegen-precompile-${signature}.jar",
-          sparkConf)
-        s"${execTempDir}/spark-columnar-plugin-codegen-precompile-${signature}.jar"
-      })
-
-      val vsmj = ColumnarSortMergeJoin.create(
-        leftKeys,
-        rightKeys,
-        resultSchema,
-        joinType,
-        condition,
-        left,
-        right,
-        isSkewJoin,
-        jarList,
-        joinTime,
-        prepareTime,
-        totaltime_sortmegejoin,
-        numOutputRows,
-        sparkConf)
-      SparkMemoryUtils.addLeakSafeTaskCompletionListener[Unit](_ => {
-        vsmj.close()
-      })
-      val vjoinResult = vsmj.columnarJoin(streamIter, buildIter)
-      new CloseableColumnBatchIterator(vjoinResult)
-    }
+    throw new UnsupportedOperationException(s"This operator doesn't support doExecuteColumnar().")
   }
 }
