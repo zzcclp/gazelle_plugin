@@ -237,7 +237,12 @@ case class ColumnarCollapseCodegenStages(
           }
         }))
       case j: HashAggregateExecTransformer =>
-        new ColumnarInputAdapter(insertWholeStageTransformer(j))
+        j.child match {
+          case trans: ConditionProjectExecTransformer =>
+            j.withNewChildren(j.children.map(insertInputAdapter))
+          case other =>
+            new ColumnarInputAdapter(insertWholeStageTransformer(j))
+        }
       case j: SortExecTransformer =>
         j.withNewChildren(
           j.children.map(child => new ColumnarInputAdapter(insertWholeStageTransformer(child))))
@@ -320,6 +325,10 @@ case class ColumnarCollapseCodegenStages(
     plan match {
       case a: HashAggregateExecTransformer =>
         if (a.child.isInstanceOf[ConditionProjectExecTransformer]) {
+          WholeStageTransformerExec(
+            a.withNewChildren(a.children.map(insertInputAdapter)))(
+            codegenStageCounter.incrementAndGet())
+        } else if (a.child.isInstanceOf[HashAggregateExecTransformer]) {
           WholeStageTransformerExec(
             a.withNewChildren(a.children.map(insertInputAdapter)))(
             codegenStageCounter.incrementAndGet())

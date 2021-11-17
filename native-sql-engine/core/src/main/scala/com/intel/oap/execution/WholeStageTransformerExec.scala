@@ -271,7 +271,6 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
     val signature = doBuild()
     val listJars = uploadAndListJars(signature)
-    val resCtx = doWholestageTransform()
 
     val numOutputBatches = child.longMetric("numOutputBatches")
     val pipelineTime = longMetric("pipelineTime")
@@ -456,6 +455,7 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
       })
 
       // Start Transform
+      val resCtx = doWholestageTransform()
       val lazyReadFunction = prepareLazyReadFunction()
       val lazyReadExpr =
         TreeBuilder.makeExpression(

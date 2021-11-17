@@ -212,14 +212,18 @@ case class HashAggregateExecTransformer(
     aggregateExpressions.toList.foreach(aggExpr => {
       val aggregatFunc = aggExpr.aggregateFunction
       val mode = modeToKeyWord(aggExpr.mode)
-      val childrenNodes = aggregatFunc.children.toList.map(expr => {
-        val aggExpr: Expression = ExpressionConverter
-          .replaceWithExpressionTransformer(expr, originalInputAttributes)
-        aggExpr.asInstanceOf[ExpressionTransformer].doTransform(args)
-      })
       val childrenNodeList = new util.ArrayList[ExpressionNode]()
-      for (node <- childrenNodes) {
-        childrenNodeList.add(node)
+      aggExpr.mode match {
+        case Partial =>
+          val childrenNodes = aggregatFunc.children.toList.map(expr => {
+            val aggExpr: Expression = ExpressionConverter
+              .replaceWithExpressionTransformer(expr, originalInputAttributes)
+            aggExpr.asInstanceOf[ExpressionTransformer].doTransform(args)
+          })
+          for (node <- childrenNodes) {
+            childrenNodeList.add(node)
+          }
+        case other =>
       }
       // FIXME: return type of a aggregateFunciton
       val outputTypeNode = ConverterUtils.getTypeNode(
