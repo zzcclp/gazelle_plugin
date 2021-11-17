@@ -32,24 +32,11 @@ import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.UnaryExecNode
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
-case class ColumnarCoalesceExec(numPartitions: Int, child: SparkPlan) extends UnaryExecNode {
+case class CoalesceExecTransformer(numPartitions: Int, child: SparkPlan)
+  extends UnaryExecNode with TransformSupport {
 
   override def supportsColumnar: Boolean = true
   override def output: Seq[Attribute] = child.output
-
-  buildCheck()
-
-  def buildCheck(): Unit = {
-    for (attr <- output) {
-      try {
-        ConverterUtils.checkIfTypeSupported(attr.dataType)
-      } catch {
-        case e: UnsupportedOperationException =>
-          throw new UnsupportedOperationException(
-            s"${attr.dataType} is not supported in ColumnarCoalesceExec.")
-      }
-    }
-  }
 
   override def outputPartitioning: Partitioning = {
     if (numPartitions == 1) SinglePartition
@@ -61,17 +48,33 @@ case class ColumnarCoalesceExec(numPartitions: Int, child: SparkPlan) extends Un
   }
 
   override protected def doExecuteColumnar(): RDD[ColumnarBatch] = {
-    if (numPartitions == 1 && child.executeColumnar().getNumPartitions < 1) {
-      // Make sure we don't output an RDD with 0 partitions, when claiming that we have a
-      // `SinglePartition`.
-      new ColumnarCoalesceExec.EmptyRDDWithPartitions(sparkContext, numPartitions)
-    } else {
-      child.executeColumnar().coalesce(numPartitions, shuffle = false)
-    }
+    throw new UnsupportedOperationException(s"This operator doesn't support doExecuteColumnar().")
+  }
+
+  override def inputRDDs: Seq[RDD[ColumnarBatch]] = {
+    throw new UnsupportedOperationException(s"This operator doesn't support inputRDDs.")
+  }
+
+  override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = {
+    throw new UnsupportedOperationException(s"This operator doesn't support getBuildPlans.")
+  }
+
+  override def getStreamedLeafPlan: SparkPlan = {
+    throw new UnsupportedOperationException(s"This operator doesn't support getStreamedLeafPlan.")
+  }
+
+  override def getChild: SparkPlan = {
+    throw new UnsupportedOperationException(s"This operator doesn't support getChild.")
+  }
+
+  override def doValidate(): Boolean = false
+
+  override def doTransform(args: Object): TransformContext = {
+    throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")
   }
 }
 
-object ColumnarCoalesceExec {
+object CoalesceExecTransformer {
   class EmptyRDDWithPartitions(
       @transient private val sc: SparkContext,
       numPartitions: Int) extends RDD[ColumnarBatch](sc, Nil) {
