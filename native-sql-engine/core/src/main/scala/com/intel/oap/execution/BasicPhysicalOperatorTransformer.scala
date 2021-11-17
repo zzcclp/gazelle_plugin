@@ -99,21 +99,21 @@ case class ConditionProjectExecTransformer(
     }
 
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
-    case c: TransformSupport if c.supportTransform =>
+    case c: TransformSupport =>
       c.inputRDDs
     case _ =>
       Seq(child.executeColumnar())
   }
 
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = child match {
-    case c: TransformSupport if c.supportTransform =>
+    case c: TransformSupport =>
       c.getBuildPlans
     case _ =>
       Seq()
   }
 
   override def getStreamedLeafPlan: SparkPlan = child match {
-    case c: TransformSupport if c.supportTransform =>
+    case c: TransformSupport =>
       c.getStreamedLeafPlan
     case _ =>
       this
@@ -128,8 +128,6 @@ case class ConditionProjectExecTransformer(
 
   override def getChild: SparkPlan = child
 
-  override def supportTransform: Boolean = true
-
   // override def canEqual(that: Any): Boolean = false
 
   def getRelNode(args: java.lang.Object, childRel: RelNode): RelNode = {
@@ -138,7 +136,7 @@ case class ConditionProjectExecTransformer(
 
   override def doTransform(args: java.lang.Object): TransformContext = {
     val (childCtx, kernelFunction) = child match {
-      case c: TransformSupport if c.supportTransform =>
+      case c: TransformSupport =>
         val ctx = c.doTransform(args)
         (ctx, getRelNode(args, ctx.root))
       case _ =>
