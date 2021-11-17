@@ -246,4 +246,41 @@ object ExpressionConverter extends Logging {
         throw new UnsupportedOperationException(
           s" --> ${expr.getClass} | ${expr} is not currently supported.")
     }
+
+  def containsSubquery(expr: Expression): Boolean =
+    expr match {
+      case a: AttributeReference =>
+        return false
+      case lit: Literal =>
+        return false
+      case b: BoundReference =>
+        return false
+      case u: UnaryExpression =>
+        containsSubquery(u.child)
+      case b: BinaryOperator =>
+        containsSubquery(b.left) || containsSubquery(b.right)
+      case i: If =>
+        containsSubquery(i.predicate) || containsSubquery(i.trueValue) || containsSubquery(
+          i.falseValue)
+      case cw: CaseWhen =>
+        cw.branches.exists(p => containsSubquery(p._1) || containsSubquery(p._2)) ||
+                           cw.elseValue.exists(containsSubquery)
+      case c: Coalesce =>
+        c.children.exists(containsSubquery)
+      case i: In =>
+        containsSubquery(i.value)
+      case ss: Substring =>
+        containsSubquery(ss.str) || containsSubquery(ss.pos) || containsSubquery(ss.len)
+      case oaps: com.intel.oap.expression.ScalarSubqueryTransformer =>
+        return true
+      case s: org.apache.spark.sql.execution.ScalarSubquery =>
+        return true
+      case c: Concat =>
+        c.children.exists(containsSubquery)
+      case b: BinaryExpression =>
+        containsSubquery(b.left) || containsSubquery(b.right)
+      case expr =>
+        throw new UnsupportedOperationException(
+          s" --> ${expr.getClass} | ${expr} is not currently supported.")
+    }
 }

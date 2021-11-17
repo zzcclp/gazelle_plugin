@@ -73,13 +73,14 @@ trait TransformSupport extends SparkPlan {
   def updateMetrics(out_num_rows: Long, process_time: Long): Unit = {}
 }
 
-case class WholeStageTransformer(child: SparkPlan)(val transformStageId: Int)
+case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int)
     extends UnaryExecNode
     with TransformSupport {
 
   val sparkConf = sparkContext.getConf
   val numaBindingInfo = GazellePluginConfig.getConf.numaBindingInfo
-  val enableColumnarSortMergeJoinLazyRead = GazellePluginConfig.getConf.enableColumnarSortMergeJoinLazyRead
+  val enableColumnarSortMergeJoinLazyRead =
+    GazellePluginConfig.getConf.enableColumnarSortMergeJoinLazyRead
 
   override lazy val metrics = Map(
     "numOutputRows" -> SQLMetrics.createMetric(sparkContext, "number of output rows"),
@@ -92,10 +93,6 @@ case class WholeStageTransformer(child: SparkPlan)(val transformStageId: Int)
   override def outputPartitioning: Partitioning = child.outputPartitioning
 
   override def outputOrdering: Seq[SortOrder] = child.outputOrdering
-
-  // This is not strictly needed because the codegen transformation happens after the columnar
-  // transformation but just for consistency
-  override def supportTransform: Boolean = true
 
   override def supportsColumnar: Boolean = true
 
@@ -123,7 +120,7 @@ case class WholeStageTransformer(child: SparkPlan)(val transformStageId: Int)
     res
   }
 
-  override def nodeName: String = s"WholeStageCodegenColumnar (${transformStageId})"
+  override def nodeName: String = s"WholeStageCodegenTransformer (${transformStageId})"
   def uploadAndListJars(signature: String): Seq[String] =
     if (signature != "") {
       if (sparkContext.listJars.filter(path => path.contains(s"${signature}.jar")).isEmpty) {
@@ -259,38 +256,11 @@ case class WholeStageTransformer(child: SparkPlan)(val transformStageId: Int)
    * Return built cpp library's signature
    */
   def doBuild(): String = {
-//    var resCtx: TransformContext = null
-//    try {
-//      // call native wholestagecodegen build
-//      resCtx = doTransform
-//    } catch {
-//      case e: UnsupportedOperationException
-//          if e.getMessage == "Unsupport to generate native expression from replaceable expression." =>
-//        logWarning(e.getMessage)
-//        ""
-//      case e: Throwable =>
-//        throw e
-//    }
-//    // resCtx = doCodeGen
-//    if (resCtx != null) {
-//      val expression =
-//        TreeBuilder.makeExpression(
-//          resCtx.root,
-//          Field.nullable("result", new ArrowType.Int(32, true)))
-//      val nativeKernel = new ExpressionEvaluator()
-//      nativeKernel.build(
-//        resCtx.inputSchema,
-//        Lists.newArrayList(expression),
-//        resCtx.outputSchema,
-//        true)
-//    } else {
-//      ""
-//    }
     ""
   }
 
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
-    case c: TransformSupport if c.supportTransform =>
+    case c: TransformSupport =>
       c.inputRDDs
     case _ =>
       throw new UnsupportedOperationException
@@ -301,6 +271,7 @@ case class WholeStageTransformer(child: SparkPlan)(val transformStageId: Int)
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
     val signature = doBuild()
     val listJars = uploadAndListJars(signature)
+    val resCtx = doWholestageTransform()
 
     val numOutputBatches = child.longMetric("numOutputBatches")
     val pipelineTime = longMetric("pipelineTime")
@@ -484,7 +455,6 @@ case class WholeStageTransformer(child: SparkPlan)(val transformStageId: Int)
         s"${execTempDir}/spark-columnar-plugin-codegen-precompile-${signature}.jar"
       })
 
-      val resCtx = doWholestageTransform()
       // Start Transform
       val lazyReadFunction = prepareLazyReadFunction()
       val lazyReadExpr =
@@ -503,7 +473,7 @@ case class WholeStageTransformer(child: SparkPlan)(val transformStageId: Int)
       build_elapse += System.nanoTime() - beforeBuild
       val resultStructType = ArrowUtils.fromArrowSchema(resCtx.outputSchema)
       val resIter = streamedSortPlan match {
-        case p: ColumnarSortExec =>
+        case p: SortExecTransformer =>
           new Iterator[ColumnarBatch] {
             override def hasNext: Boolean = {
               val res = nativeIterator.hasNext
@@ -532,7 +502,7 @@ case class WholeStageTransformer(child: SparkPlan)(val transformStageId: Int)
           new Iterator[ColumnarBatch] {
             override def hasNext: Boolean = {
               val res = nativeIterator.hasNext
-//              if (res == false) updateMetrics(nativeIterator)
+              // if (res == false) updateMetrics(nativeIterator)
               res
             }
 
@@ -557,7 +527,7 @@ case class WholeStageTransformer(child: SparkPlan)(val transformStageId: Int)
           new Iterator[ColumnarBatch] {
             override def hasNext: Boolean = {
               val res = nativeIterator.hasNext
-//              if (res == false) updateMetrics(nativeIterator)
+              // if (res == false) updateMetrics(nativeIterator)
               res
             }
 
@@ -623,7 +593,7 @@ case class WholeStageTransformer(child: SparkPlan)(val transformStageId: Int)
         buildRelationBatchHolder.foreach(_.close) // fixing: ref cnt goes nagative
         dependentKernels.foreach(_.close)
         dependentKernelIterators.foreach(_.close)
-//        nativeKernel.close
+        // nativeKernel.close
         nativeIterator.close
         relationHolder.clear()
       }

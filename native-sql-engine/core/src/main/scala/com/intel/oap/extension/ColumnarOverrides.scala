@@ -18,7 +18,7 @@
 package com.intel.oap
 
 import com.intel.oap.execution._
-import com.intel.oap.extension.columnar.{ColumnarGuardRule, RowGuard, TransformGuardRule}
+import com.intel.oap.extension.columnar.{RowGuard, TransformGuardRule}
 import com.intel.oap.sql.execution.RowToArrowColumnarExec
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.Logging
@@ -32,7 +32,7 @@ import org.apache.spark.sql.execution.columnar.InMemoryTableScanExec
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.execution.exchange._
 import org.apache.spark.sql.execution.joins._
-import org.apache.spark.sql.execution.python.{ArrowEvalPythonExec, ColumnarArrowEvalPythonExec}
+import org.apache.spark.sql.execution.python.{ArrowEvalPythonExec, ArrowEvalPythonExecTransformer}
 import org.apache.spark.sql.execution.window.WindowExec
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.CalendarIntervalType
@@ -64,7 +64,7 @@ case class TransformPreOverrides() extends Rule[SparkPlan] {
       actualPlan.withNewChildren(actualPlan.children.map(replaceWithTransformerPlan))
     case plan: ArrowEvalPythonExec =>
       val columnarChild = replaceWithTransformerPlan(plan.child)
-      ColumnarArrowEvalPythonExec(plan.udfs, plan.resultAttrs, columnarChild, plan.evalType)
+      ArrowEvalPythonExecTransformer(plan.udfs, plan.resultAttrs, columnarChild, plan.evalType)
     case plan: BatchScanExec =>
       logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
       new ColumnarBatchScanExec(plan.output, plan.scan)

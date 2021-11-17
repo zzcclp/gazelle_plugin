@@ -170,8 +170,8 @@ case class ConditionProjectExecTransformer(
                             input: RelNode): RelNode = {
     val typeNodes = ConverterUtils.getTypeNodeFromAttributes(originalInputAttributes)
     val filterNode = if (condExpr != null) {
-      val columnarCondExpr: Expression = ColumnarExpressionConverter
-        .replaceWithColumnarExpression(condExpr, attributeSeq = originalInputAttributes)
+      val columnarCondExpr: Expression = ExpressionConverter
+        .replaceWithExpressionTransformer(condExpr, attributeSeq = originalInputAttributes)
       val condExprNode =
         columnarCondExpr.asInstanceOf[ExpressionTransformer].doTransform(args)
       RelBuilder.makeFilterRel(input, condExprNode, typeNodes)
@@ -180,8 +180,8 @@ case class ConditionProjectExecTransformer(
     }
     val projectRel = if (projectList != null && projectList.nonEmpty) {
       val columnarProjExprs: Seq[Expression] = projectList.map(expr => {
-        ColumnarExpressionConverter
-          .replaceWithColumnarExpression(expr, attributeSeq = originalInputAttributes)
+        ExpressionConverter
+          .replaceWithExpressionTransformer(expr, attributeSeq = originalInputAttributes)
       })
       val projExprNodeList = new java.util.ArrayList[ExpressionNode]()
       for (expr <- columnarProjExprs) {

@@ -375,7 +375,7 @@ object ConverterUtils extends Logging {
         } else {
           a.toAttribute.asInstanceOf[AttributeReference]
         }
-      case d: ColumnarDivide =>
+      case d: DivideTransformer =>
         new AttributeReference(name, DoubleType, d.nullable)()
       case m: MultiplyTransformer =>
         new AttributeReference(name, m.dataType, m.nullable)()
@@ -423,27 +423,6 @@ object ConverterUtils extends Logging {
       batch += (row + "\n")
     }
     logWarning(s"batch:\n$batch")
-  }
-
-  def getColumnarFuncNode(
-      expr: Expression,
-      attributes: Seq[Attribute] = null): (TreeNode, ArrowType) = {
-    if (expr.isInstanceOf[AttributeReference] && expr
-          .asInstanceOf[AttributeReference]
-          .name == "none") {
-      throw new UnsupportedOperationException(
-        s"Unsupport to generate native expression from replaceable expression.")
-    }
-    var columnarExpr: Expression = if (attributes != null) {
-      ColumnarExpressionConverter.replaceWithColumnarExpression(
-        expr,
-        attributeSeq = attributes,
-        convertBoundRefToAttrRef = true)
-    } else {
-      ColumnarExpressionConverter.replaceWithColumnarExpression(expr)
-    }
-    var inputList: java.util.List[Field] = Lists.newArrayList()
-    columnarExpr.asInstanceOf[ColumnarExpression].doColumnarCodeGen(inputList)
   }
 
   def ifEquals(left: Seq[AttributeReference], right: Seq[NamedExpression]): Boolean = {

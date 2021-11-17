@@ -33,7 +33,7 @@ import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.execution.exchange._
 import org.apache.spark.sql.execution.joins._
 import org.apache.spark.sql.execution.python.ArrowEvalPythonExec
-import org.apache.spark.sql.execution.python.ColumnarArrowEvalPythonExec
+import org.apache.spark.sql.execution.python.ArrowEvalPythonExecTransformer
 import org.apache.spark.sql.execution.window.WindowExec
 
 case class RowGuard(child: SparkPlan) extends SparkPlan {
@@ -67,7 +67,10 @@ case class TransformGuardRule() extends Rule[SparkPlan] {
       val columnarPlan = plan match {
         case plan: ArrowEvalPythonExec =>
           if (!enableColumnarArrowUDF) return false
-          ColumnarArrowEvalPythonExec(plan.udfs, plan.resultAttrs, plan.child, plan.evalType)
+          val transformer = ArrowEvalPythonExecTransformer(
+            plan.udfs, plan.resultAttrs, plan.child, plan.evalType)
+          if (!transformer.doValidate()) return false
+          transformer
         case plan: BatchScanExec =>
           if (!enableColumnarBatchScan) return false
           new ColumnarBatchScanExec(plan.output, plan.scan)

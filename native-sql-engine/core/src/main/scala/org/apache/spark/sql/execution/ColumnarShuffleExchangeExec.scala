@@ -18,18 +18,9 @@
 package org.apache.spark.sql.execution
 
 import com.google.common.collect.Lists
-import com.intel.oap.expression.{
-  CodeGeneration,
-  ColumnarExpression,
-  ColumnarExpressionConverter,
-  ConverterUtils
-}
-import com.intel.oap.vectorized.{
-  ArrowColumnarBatchSerializer,
-  ArrowWritableColumnVector,
-  NativePartitioning
-}
-import org.apache.arrow.gandiva.expression.TreeBuilder
+import com.intel.oap.expression.{CodeGeneration, ConverterUtils, ExpressionConverter, ExpressionTransformer}
+import com.intel.oap.vectorized.{ArrowColumnarBatchSerializer, ArrowWritableColumnVector, NativePartitioning}
+import org.apache.arrow.gandiva.expression.{TreeBuilder, TreeNode}
 import org.apache.arrow.vector.types.pojo.{ArrowType, Field, FieldType, Schema}
 import org.apache.spark._
 import org.apache.spark.internal.Logging
@@ -46,12 +37,7 @@ import org.apache.spark.sql.execution.datasources.v2.arrow.SparkMemoryUtils
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec.createShuffleWriteProcessor
 import org.apache.spark.sql.execution.exchange._
-import org.apache.spark.sql.execution.metric.{
-  SQLMetric,
-  SQLMetrics,
-  SQLShuffleReadMetricsReporter,
-  SQLShuffleWriteMetricsReporter
-}
+import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics, SQLShuffleReadMetricsReporter, SQLShuffleWriteMetricsReporter}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
@@ -373,11 +359,13 @@ object ColumnarShuffleExchangeExec extends Logging {
       case HashPartitioning(exprs, n) =>
         val gandivaExprs = exprs.zipWithIndex.map {
           case (expr, i) =>
-            val columnarExpr = ColumnarExpressionConverter
-              .replaceWithColumnarExpression(expr)
-              .asInstanceOf[ColumnarExpression]
-            val input: java.util.List[Field] = Lists.newArrayList()
-            val (treeNode, resultType) = columnarExpr.doColumnarCodeGen(input)
+            // FIXME
+//            val columnarExpr = ColumnarExpressionConverter
+//              .replaceWithColumnarExpression(expr)
+//              .asInstanceOf[ColumnarExpression]
+//            val input: java.util.List[Field] = Lists.newArrayList()
+//            val (treeNode, resultType) = columnarExpr.doColumnarCodeGen(input)
+            val treeNode : TreeNode = null
             val attr = ConverterUtils.getAttrFromExpr(expr)
             val field = Field
               .nullable(

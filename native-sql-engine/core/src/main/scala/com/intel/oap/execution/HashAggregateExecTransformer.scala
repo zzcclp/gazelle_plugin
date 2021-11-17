@@ -121,21 +121,21 @@ case class HashAggregateExecTransformer(
   }
 
   override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
-    case c: TransformSupport if c.supportTransform =>
+    case c: TransformSupport =>
       c.inputRDDs
     case _ =>
       Seq(child.executeColumnar())
   }
 
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = child match {
-    case c: TransformSupport if c.supportTransform =>
+    case c: TransformSupport =>
       c.getBuildPlans
     case _ =>
       Seq()
   }
 
   override def getStreamedLeafPlan: SparkPlan = child match {
-    case c: TransformSupport if c.supportTransform =>
+    case c: TransformSupport =>
       c.getStreamedLeafPlan
     case _ =>
       this
@@ -150,13 +150,11 @@ case class HashAggregateExecTransformer(
 
   override def getChild: SparkPlan = child
 
-  override def supportTransform: Boolean = true
-
   // override def canEqual(that: Any): Boolean = false
 
   override def doTransform(args: java.lang.Object): TransformContext = {
     val childCtx = child match {
-      case c: TransformSupport if c.supportTransform =>
+      case c: TransformSupport =>
         c.doTransform(args)
       case _ =>
         null
@@ -203,8 +201,8 @@ case class HashAggregateExecTransformer(
     // Get the aggregate function nodes
     val aggregateFunctionList = new util.ArrayList[AggregateFunctionNode]()
     groupingExpressions.toList.foreach(expr => {
-      val groupingExpr: Expression = ColumnarExpressionConverter
-        .replaceWithColumnarExpression(expr, originalInputAttributes)
+      val groupingExpr: Expression = ExpressionConverter
+        .replaceWithExpressionTransformer(expr, originalInputAttributes)
       val exprNode = groupingExpr.asInstanceOf[ExpressionTransformer].doTransform(args)
       val outputTypeNode = ConverterUtils.getTypeNode(expr.dataType, expr.name, expr.nullable)
       val aggFunctionNode = ExpressionBuilder.makeAggregateFunction(
@@ -215,8 +213,8 @@ case class HashAggregateExecTransformer(
       val aggregatFunc = aggExpr.aggregateFunction
       val mode = modeToKeyWord(aggExpr.mode)
       val childrenNodes = aggregatFunc.children.toList.map(expr => {
-        val aggExpr: Expression = ColumnarExpressionConverter
-          .replaceWithColumnarExpression(expr, originalInputAttributes)
+        val aggExpr: Expression = ExpressionConverter
+          .replaceWithExpressionTransformer(expr, originalInputAttributes)
         aggExpr.asInstanceOf[ExpressionTransformer].doTransform(args)
       })
       val childrenNodeList = new util.ArrayList[ExpressionNode]()

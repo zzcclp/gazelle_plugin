@@ -20,7 +20,7 @@ package org.apache.spark.sql.execution
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.intel.oap.execution._
-import com.intel.oap.expression.ColumnarExpressionConverter
+import com.intel.oap.expression.ExpressionConverter
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.expressions._
@@ -119,35 +119,34 @@ case class ColumnarCollapseCodegenStages(
     extends Rule[SparkPlan] {
 
   private def supportCodegen(plan: SparkPlan): Boolean = plan match {
-    case plan: TransformSupport =>
-      plan.supportTransform
+    case plan: TransformSupport => true
     case _ => false
   }
 
   private def containsSubquery(expr: Expression): Boolean = {
     if (expr == null) false
     else {
-      ColumnarExpressionConverter.containsSubquery(expr)
+      ExpressionConverter.containsSubquery(expr)
     }
   }
 
   private def containsSubquery(exprs: Seq[Expression]): Boolean = {
     if (exprs == null) false
     else {
-      exprs.map(ColumnarExpressionConverter.containsSubquery).exists(_ == true)
+      exprs.map(ExpressionConverter.containsSubquery).exists(_ == true)
     }
   }
 
   private def existsJoins(plan: SparkPlan, count: Int = 0): Boolean = plan match {
-    case p: ColumnarBroadcastHashJoinExec =>
+    case p: BroadcastHashJoinExecTransformer =>
       if (p.condition.isDefined) return true
       if (count >= 1) true
       else plan.children.map(existsJoins(_, count + 1)).exists(_ == true)
-    case p: ColumnarShuffledHashJoinExec =>
+    case p: ShuffledHashJoinExecTransformer =>
       if (p.condition.isDefined) return true
       if (count >= 1) true
       else plan.children.map(existsJoins(_, count + 1)).exists(_ == true)
-    case p: ColumnarSortMergeJoinExec =>
+    case p: SortMergeJoinExecTransformer =>
       true
     case p: HashAggregateExecTransformer =>
       if (count >= 1) true
@@ -155,7 +154,7 @@ case class ColumnarCollapseCodegenStages(
     case p: ConditionProjectExecTransformer
         if (containsSubquery(p.condition) || containsSubquery(p.projectList)) =>
       false
-    case p: TransformSupport if p.supportTransform =>
+    case p: TransformSupport =>
       plan.children.map(existsJoins(_, count)).exists(_ == true)
     case _ =>
       false
@@ -171,15 +170,15 @@ case class ColumnarCollapseCodegenStages(
   }
 
   private def containsExpression(projectList: Seq[NamedExpression]): Boolean = {
-    projectList.map(containsExpression).exists(_ == true)
+    projectList.exists(containsExpression)
   }
 
   private def joinOptimization(
       plan: ConditionProjectExecTransformer,
       skip_smj: Boolean = false): SparkPlan = plan.child match {
-    case p: ColumnarBroadcastHashJoinExec
+    case p: BroadcastHashJoinExecTransformer
         if plan.condition == null && !containsExpression(plan.projectList) =>
-      ColumnarBroadcastHashJoinExec(
+      BroadcastHashJoinExecTransformer(
         p.leftKeys,
         p.rightKeys,
         p.joinType,
@@ -189,9 +188,9 @@ case class ColumnarCollapseCodegenStages(
         p.right,
         plan.projectList,
         nullAware = p.isNullAwareAntiJoin)
-    case p: ColumnarShuffledHashJoinExec
+    case p: ShuffledHashJoinExecTransformer
         if plan.condition == null && !containsExpression(plan.projectList) =>
-      ColumnarShuffledHashJoinExec(
+      ShuffledHashJoinExecTransformer(
         p.leftKeys,
         p.rightKeys,
         p.joinType,
@@ -200,9 +199,9 @@ case class ColumnarCollapseCodegenStages(
         p.left,
         p.right,
         plan.projectList)
-    case p: ColumnarSortMergeJoinExec
+    case p: SortMergeJoinExecTransformer
         if !skip_smj && plan.condition == null && !containsExpression(plan.projectList) =>
-      ColumnarSortMergeJoinExec(
+      SortMergeJoinExecTransformer(
         p.leftKeys,
         p.rightKeys,
         p.joinType,
@@ -224,11 +223,11 @@ case class ColumnarCollapseCodegenStages(
       case p: ConditionProjectExecTransformer
           if (containsSubquery(p.condition) || containsSubquery(p.projectList)) =>
         new ColumnarInputAdapter(p.withNewChildren(p.children.map(insertWholeStageTransformer)))
-      case j: ColumnarSortMergeJoinExec
-          if j.buildPlan.isInstanceOf[ColumnarSortMergeJoinExec] || (j.buildPlan
+      case j: SortMergeJoinExecTransformer
+          if j.buildPlan.isInstanceOf[SortMergeJoinExecTransformer] || (j.buildPlan
             .isInstanceOf[ConditionProjectExecTransformer] && j.buildPlan
             .children(0)
-            .isInstanceOf[ColumnarSortMergeJoinExec]) =>
+            .isInstanceOf[SortMergeJoinExecTransformer]) =>
         // we don't support any ColumnarSortMergeJoin whose both children are ColumnarSortMergeJoin
         j.withNewChildren(j.children.map(c => {
           if (c.equals(j.buildPlan)) {
@@ -239,7 +238,7 @@ case class ColumnarCollapseCodegenStages(
         }))
       case j: HashAggregateExecTransformer =>
         new ColumnarInputAdapter(insertWholeStageTransformer(j))
-      case j: ColumnarSortExec =>
+      case j: SortExecTransformer =>
         j.withNewChildren(
           j.children.map(child => new ColumnarInputAdapter(insertWholeStageTransformer(child))))
       case p =>
@@ -248,7 +247,7 @@ case class ColumnarCollapseCodegenStages(
             val after_opt = joinOptimization(exec)
             if (after_opt.isInstanceOf[ConditionProjectExecTransformer]) {
               after_opt.withNewChildren(after_opt.children.map(c => {
-                if (c.isInstanceOf[ColumnarSortExec]) {
+                if (c.isInstanceOf[SortExecTransformer]) {
                   new ColumnarInputAdapter(insertWholeStageTransformer(c))
                 } else {
                   insertInputAdapter(c)
@@ -321,7 +320,7 @@ case class ColumnarCollapseCodegenStages(
     plan match {
       case a: HashAggregateExecTransformer =>
         if (a.child.isInstanceOf[ConditionProjectExecTransformer]) {
-          WholeStageTransformer(
+          WholeStageTransformerExec(
             a.withNewChildren(a.children.map(insertInputAdapter)))(
             codegenStageCounter.incrementAndGet())
         } else {

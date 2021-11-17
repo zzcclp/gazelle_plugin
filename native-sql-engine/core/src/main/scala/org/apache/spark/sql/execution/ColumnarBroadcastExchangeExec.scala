@@ -74,7 +74,6 @@ case class ColumnarBroadcastExchangeExec(mode: BroadcastMode, child: SparkPlan) 
       throw new UnsupportedOperationException(
         s"ColumnarBroadcastExchange only support HashRelationMode")
   }
-  buildCheck()
 
   @transient
   lazy val promise = Promise[broadcast.Broadcast[Any]]()
@@ -124,8 +123,10 @@ case class ColumnarBroadcastExchangeExec(mode: BroadcastMode, child: SparkPlan) 
 
         ///////////// After collect data to driver side, build hashmap here /////////////
         val beforeBuild = System.nanoTime()
-        val hash_relation_function =
-          ColumnarConditionedProbeJoin.prepareHashBuildFunction(buildKeyExprs, output, 1, true)
+        // FIXME
+//        val hash_relation_function =
+//          ColumnarConditionedProbeJoin.prepareHashBuildFunction(buildKeyExprs, output, 1, true)
+        val hash_relation_function: TreeNode = null
         val hash_relation_expr =
           TreeBuilder.makeExpression(
             hash_relation_function,
@@ -209,20 +210,6 @@ case class ColumnarBroadcastExchangeExec(mode: BroadcastMode, child: SparkPlan) 
           promise.failure(e)
           throw e
       }
-    }
-  }
-
-  def buildCheck(): Unit = {
-    output.toList.foreach(attr => {
-      try {
-        ConverterUtils.checkIfTypeSupported(attr.dataType)
-      } catch {
-        case e : UnsupportedOperationException =>
-          throw new UnsupportedOperationException(
-            s"${attr.dataType} is not supported in ColumnarBroadcastExchangeExec.")
-      }})
-    for (expr <- buildKeyExprs) {
-      ColumnarExpressionConverter.replaceWithColumnarExpression(expr)
     }
   }
 
