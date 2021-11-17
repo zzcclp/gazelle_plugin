@@ -41,9 +41,6 @@ class DateAddIntervalTransformer(start: Expression, interval: Expression, origin
     extends DateAddInterval(start, interval, original.timeZoneId, original.ansiEnabled)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 

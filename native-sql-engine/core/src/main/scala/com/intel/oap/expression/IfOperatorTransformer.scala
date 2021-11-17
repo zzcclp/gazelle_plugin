@@ -34,9 +34,6 @@ class IfTransformer(predicate: Expression, trueValue: Expression,
     extends If(predicate: Expression, trueValue: Expression, falseValue: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 

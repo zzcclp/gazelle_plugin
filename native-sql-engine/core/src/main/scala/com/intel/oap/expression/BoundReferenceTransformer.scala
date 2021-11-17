@@ -35,9 +35,6 @@ class BoundReferenceTransformer(ordinal: Int, dataType: DataType, nullable: Bool
     extends BoundReference(ordinal, dataType, nullable)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = {
     ExpressionBuilder.makeSelection(ordinal.asInstanceOf[java.lang.Integer])
   }

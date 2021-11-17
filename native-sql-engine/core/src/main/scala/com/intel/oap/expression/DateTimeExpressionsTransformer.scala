@@ -56,145 +56,91 @@ import org.apache.spark.sql.util.ArrowUtils
 
 object DateTimeExpressionsTransformer {
   class CurrentTimestampTransformer() extends CurrentTimestamp with ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class CurrentDateTransformer(timeZoneId: Option[String] = None) extends CurrentDate(timeZoneId)
       with ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class NowTransformer() extends Now()
       with ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class HourTransformer(child: Expression, timeZoneId: Option[String] = None)
     extends Hour(child, timeZoneId) with ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class MinuteTransformer(child: Expression, timeZoneId: Option[String] = None)
     extends Minute(child, timeZoneId) with ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class SecondTransformer(child: Expression, timeZoneId: Option[String] = None)
     extends Second(child, timeZoneId) with ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class DayOfMonthTransformer(child: Expression) extends DayOfMonth(child) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class DayOfYearTransformer(child: Expression) extends DayOfYear(child) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class DayOfWeekTransformer(child: Expression) extends DayOfWeek(child) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class MonthTransformer(child: Expression) extends Month(child) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class YearTransformer(child: Expression) extends Year(child) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class UnixDateTransformer(child: Expression) extends UnixDate(child) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class UnixSecondsTransformer(child: Expression) extends UnixSeconds(child) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class UnixMillisTransformer(child: Expression) extends UnixMillis(child) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class UnixMicrosTransformer(child: Expression) extends UnixMicros(child) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class SecondsToTimestampTransformer(child: Expression) extends SecondsToTimestamp(child) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class MillisToTimestampTransformer(child: Expression) extends MillisToTimestamp(child) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class MicrosToTimestampTransformer(child: Expression) extends MicrosToTimestamp(child) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
@@ -204,17 +150,11 @@ object DateTimeExpressionsTransformer {
   class UnixTimestampTransformer(left: Expression, right: Expression)
       extends UnixTimestamp(left, right) with
       ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
   class DateDiffTransformer(left: Expression, right: Expression)
       extends DateDiff(left, right) with ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 
@@ -224,9 +164,6 @@ object DateTimeExpressionsTransformer {
       day: Expression,
       failOnError: Boolean = SQLConf.get.ansiEnabled)
       extends MakeDate(year, month, day, failOnError) with ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
   class MakeTimestampTransformer(
@@ -241,9 +178,6 @@ object DateTimeExpressionsTransformer {
       failOnError: Boolean = SQLConf.get.ansiEnabled)
       extends MakeTimestamp(year, month, day, hour, min, sec, timezone, timeZoneId, failOnError)
           with ExpressionTransformer {
-    override def doValidate(): Boolean = {
-      false
-    }
     override def doTransform(args: java.lang.Object): ExpressionNode = null
   }
 

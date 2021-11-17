@@ -45,9 +45,6 @@ class IsNotNullTransformer(child: Expression, original: Expression)
     extends IsNotNull(child: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    true
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = {
     val child_node: ExpressionNode =
       child.asInstanceOf[ExpressionTransformer].doTransform(args)
@@ -72,9 +69,6 @@ class IsNullTransformer(child: Expression, original: Expression)
     extends IsNotNull(child: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -82,9 +76,6 @@ class MonthTransformer(child: Expression, original: Expression)
     extends Month(child: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -92,9 +83,6 @@ class DayOfMonthTransformer(child: Expression, original: Expression)
   extends DayOfMonth(child: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -102,9 +90,6 @@ class YearTransformer(child: Expression, original: Expression)
   extends Year(child: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -112,9 +97,6 @@ class NotTransformer(child: Expression, original: Expression)
     extends Not(child: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -122,9 +104,6 @@ class AbsTransformer(child: Expression, original: Expression)
     extends Abs(child: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -132,9 +111,6 @@ class UpperTransformer(child: Expression, original: Expression)
     extends Upper(child: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -142,9 +118,6 @@ class BitwiseNotTransformer(child: Expression, original: Expression)
     extends BitwiseNot(child: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -155,9 +128,6 @@ class CheckOverflowTransformer(child: Expression, original: CheckOverflow)
       original.nullOnOverflow: Boolean)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -169,9 +139,6 @@ class CastTransformer(
     extends Cast(child: Expression, datatype: DataType, timeZoneId: Option[String])
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -179,9 +146,6 @@ class UnscaledValueTransformer(child: Expression, original: Expression)
     extends UnscaledValue(child: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -194,9 +158,6 @@ class MakeDecimalTransformer(
     extends MakeDecimal(child: Expression, precision: Int, scale: Int, nullOnOverflow: Boolean)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -204,9 +165,6 @@ class NormalizeNaNAndZeroTransformer(child: Expression, original: NormalizeNaNAn
     extends NormalizeNaNAndZero(child: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 

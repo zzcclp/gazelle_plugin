@@ -34,9 +34,6 @@ class ConcatTransformer(exps: Seq[Expression], original: Expression)
     extends Concat(exps: Seq[Expression])
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 

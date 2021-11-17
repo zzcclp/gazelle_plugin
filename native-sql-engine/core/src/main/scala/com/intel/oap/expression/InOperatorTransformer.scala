@@ -38,9 +38,6 @@ class InTransformer(value: Expression, list: Seq[Expression], original: Expressi
     extends In(value: Expression, list: Seq[Expression])
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 

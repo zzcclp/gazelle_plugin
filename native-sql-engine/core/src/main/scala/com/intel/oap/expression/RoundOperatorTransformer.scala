@@ -37,9 +37,6 @@ class RoundExpression(child: Expression, scale: Expression, original: Expression
   extends Round(child: Expression, scale: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 

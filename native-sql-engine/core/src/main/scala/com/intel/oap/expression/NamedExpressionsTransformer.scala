@@ -34,9 +34,6 @@ class AliasTransformer(child: Expression, name: String)(
     override val explicitMetadata: Option[Metadata])
     extends Alias(child, name)(exprId, qualifier, explicitMetadata)
     with ExpressionTransformer {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -50,9 +47,6 @@ class AttributeReferenceTransformer(
     override val qualifier: Seq[String])
     extends AttributeReference(name, dataType, nullable, metadata)(exprId, qualifier)
     with ExpressionTransformer {
-  override def doValidate(): Boolean = {
-    true
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = {
     ExpressionBuilder.makeSelection(ordinal.asInstanceOf[java.lang.Integer])
   }

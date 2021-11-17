@@ -37,9 +37,6 @@ class SubStringTransformer(str: Expression, pos: Expression, len: Expression, or
     extends Substring(str: Expression, pos: Expression, len: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 

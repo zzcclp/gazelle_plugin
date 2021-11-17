@@ -46,9 +46,6 @@ class CoalesceTransformer(exps: Seq[Expression], original: Expression)
     extends Coalesce(exps: Seq[Expression])
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 

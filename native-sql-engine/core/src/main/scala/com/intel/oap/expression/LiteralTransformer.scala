@@ -37,9 +37,6 @@ import scala.collection.mutable.ListBuffer
 class LiteralTransformer(lit: Literal)
     extends Literal(lit.value, lit.dataType)
     with ExpressionTransformer {
-  override def doValidate(): Boolean = {
-    true
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = {
     dataType match {
       case t: DoubleType =>

@@ -20,12 +20,7 @@ package com.intel.oap.expression
 import com.intel.oap.substrait.expression.ExpressionNode
 
 trait ExpressionTransformer {
-
   def doTransform(args: java.lang.Object): ExpressionNode = {
     throw new UnsupportedOperationException(s"Not support doTransform.")
-  }
-
-  def doValidate(): Boolean = {
-    throw new UnsupportedOperationException(s"Not support doValidate.")
   }
 }

@@ -40,9 +40,6 @@ class AddTransformer(left: Expression, right: Expression, original: Expression)
     extends Add(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -50,9 +47,6 @@ class SubtractTransformer(left: Expression, right: Expression, original: Express
     extends Subtract(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -60,10 +54,6 @@ class MultiplyTransformer(left: Expression, right: Expression, original: Express
     extends Multiply(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-
-  override def doValidate(): Boolean = {
-    true
-  }
 
   val left_val: Any = left match {
     case c: CastTransformer =>
@@ -121,9 +111,6 @@ class DivideTransformer(left: Expression, right: Expression,
     extends Divide(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -131,9 +118,6 @@ class BitwiseAndTransformer(left: Expression, right: Expression, original: Expre
     extends BitwiseAnd(left: Expression, right: Expression)
         with ExpressionTransformer
         with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -141,9 +125,6 @@ class BitwiseOrTransformer(left: Expression, right: Expression, original: Expres
     extends BitwiseOr(left: Expression, right: Expression)
         with ExpressionTransformer
         with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -151,9 +132,6 @@ class BitwiseXorTransformer(left: Expression, right: Expression, original: Expre
     extends BitwiseXor(left: Expression, right: Expression)
         with ExpressionTransformer
         with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 

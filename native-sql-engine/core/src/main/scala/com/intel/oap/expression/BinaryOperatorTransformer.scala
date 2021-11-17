@@ -42,9 +42,6 @@ class AndTransformer(left: Expression, right: Expression, original: Expression)
     extends And(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    true
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = {
     val left_node =
       left.asInstanceOf[ExpressionTransformer].doTransform(args)
@@ -76,9 +73,6 @@ class OrTransformer(left: Expression, right: Expression, original: Expression)
     extends Or(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -86,9 +80,6 @@ class EndsWithTransformer(left: Expression, right: Expression, original: Express
     extends EndsWith(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -96,9 +87,6 @@ class StartsWithTransformer(left: Expression, right: Expression, original: Expre
     extends StartsWith(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -106,9 +94,6 @@ class LikeTransformer(left: Expression, right: Expression, original: Expression)
     extends Like(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -116,9 +101,6 @@ class ContainsTransformer(left: Expression, right: Expression, original: Express
     extends Contains(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -126,9 +108,6 @@ class EqualToTransformer(left: Expression, right: Expression, original: Expressi
     extends EqualTo(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -136,9 +115,6 @@ class EqualNullTransformer(left: Expression, right: Expression, original: Expres
     extends EqualNullSafe(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -146,9 +122,6 @@ class LessThanTransformer(left: Expression, right: Expression, original: Express
     extends LessThan(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    true
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = {
     val left_node =
       left.asInstanceOf[ExpressionTransformer].doTransform(args)
@@ -180,9 +153,6 @@ class LessThanOrEqualTransformer(left: Expression, right: Expression, original: 
     extends LessThanOrEqual(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    true
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = {
     val left_node =
       left.asInstanceOf[ExpressionTransformer].doTransform(args)
@@ -214,9 +184,6 @@ class GreaterThanTransformer(left: Expression, right: Expression, original: Expr
     extends GreaterThan(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    true
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = {
     val left_node =
       left.asInstanceOf[ExpressionTransformer].doTransform(args)
@@ -248,9 +215,6 @@ class GreaterThanOrEqualTransformer(left: Expression, right: Expression, origina
     extends GreaterThanOrEqual(left: Expression, right: Expression)
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    true
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = {
     val left_node =
       left.asInstanceOf[ExpressionTransformer].doTransform(args)
@@ -282,9 +246,6 @@ class ShiftLeftTransformer(left: Expression, right: Expression, original: Expres
     extends ShiftLeft(left: Expression, right: Expression)
         with ExpressionTransformer
         with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
@@ -292,9 +253,6 @@ class ShiftRightTransformer(left: Expression, right: Expression, original: Expre
     extends ShiftRight(left: Expression, right: Expression)
         with ExpressionTransformer
         with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 

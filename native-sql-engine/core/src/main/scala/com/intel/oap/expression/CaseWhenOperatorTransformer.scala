@@ -41,9 +41,6 @@ class CaseWhenTransformer(
     extends CaseWhen(branches: Seq[(Expression, Expression)], elseValue: Option[Expression])
     with ExpressionTransformer
     with Logging {
-  override def doValidate(): Boolean = {
-    false
-  }
   override def doTransform(args: java.lang.Object): ExpressionNode = null
 }
 
