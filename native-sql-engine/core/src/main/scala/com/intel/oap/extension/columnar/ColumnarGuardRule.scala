@@ -44,7 +44,7 @@ case class RowGuard(child: SparkPlan) extends SparkPlan {
   def children: Seq[SparkPlan] = Seq(child)
 }
 
-case class ColumnarGuardRule() extends Rule[SparkPlan] {
+case class TransformGuardRule() extends Rule[SparkPlan] {
   val columnarConf = GazellePluginConfig.getSessionConf
   val preferColumnar = columnarConf.enablePreferColumnar
   val optimizeLevel = columnarConf.joinOptimizationThrottle
@@ -62,7 +62,7 @@ case class ColumnarGuardRule() extends Rule[SparkPlan] {
   val enableColumnarBroadcastJoin = columnarConf.enableColumnarBroadcastJoin
   val enableColumnarArrowUDF = columnarConf.enableColumnarArrowUDF
 
-  private def tryConvertToColumnar(plan: SparkPlan): Boolean = {
+  private def tryConvertToTransformer(plan: SparkPlan): Boolean = {
     try {
       val columnarPlan = plan match {
         case plan: ArrowEvalPythonExec =>
@@ -77,20 +77,25 @@ case class ColumnarGuardRule() extends Rule[SparkPlan] {
           }
           plan
         case plan: InMemoryTableScanExec =>
-          if(plan.relation.cacheBuilder.serializer.isInstanceOf[ArrowColumnarCachedBatchSerializer]) {
-            new ColumnarInMemoryTableScanExec(plan.attributes, plan.predicates, plan.relation)
+          if (plan.relation.cacheBuilder.serializer
+              .isInstanceOf[ArrowColumnarCachedBatchSerializer]) {
+            ColumnarInMemoryTableScanExec(plan.attributes, plan.predicates, plan.relation)
           } else {
             return false
           }
         case plan: ProjectExec =>
           if (!enableColumnarProjFilter) return false
-          new ConditionProjectExecTransformer(null, plan.projectList, plan.child)
+          val transformer = ConditionProjectExecTransformer(null, plan.projectList, plan.child)
+          if (!transformer.doValidate()) return false
+          transformer
         case plan: FilterExec =>
           if (!enableColumnarProjFilter) return false
-          new ConditionProjectExecTransformer(plan.condition, null, plan.child)
+          val transformer = ConditionProjectExecTransformer(plan.condition, null, plan.child)
+          if (!transformer.doValidate()) return false
+          transformer
         case plan: HashAggregateExec =>
           if (!enableColumnarHashAgg) return false
-          new HashAggregateExecTransformer(
+          val transformer = HashAggregateExecTransformer(
             plan.requiredChildDistributionExpressions,
             plan.groupingExpressions,
             plan.aggregateExpressions,
@@ -98,15 +103,24 @@ case class ColumnarGuardRule() extends Rule[SparkPlan] {
             plan.initialInputBufferOffset,
             plan.resultExpressions,
             plan.child)
+          if (!transformer.doValidate()) return false
+          transformer
         case plan: UnionExec =>
           if (!enableColumnarUnion) return false
-          new ColumnarUnionExec(plan.children)
+          val transformer = UnionExecTransformer(plan.children)
+          if (!transformer.doValidate()) return false
+          transformer
         case plan: ExpandExec =>
           if (!enableColumnarExpand) return false
-          new ColumnarExpandExec(plan.projections, plan.output, plan.child)
+          val transformer = ExpandExecTransformer(plan.projections, plan.output, plan.child)
+          if (!transformer.doValidate()) return false
+          transformer
         case plan: SortExec =>
           if (!enableColumnarSort) return false
-          new ColumnarSortExec(plan.sortOrder, plan.global, plan.child, plan.testSpillFrequency)
+          val transformer = SortExecTransformer(
+            plan.sortOrder, plan.global, plan.child, plan.testSpillFrequency)
+          if (!transformer.doValidate()) return false
+          transformer
         case plan: ShuffleExchangeExec =>
           if (!enableColumnarShuffle) return false
           new ColumnarShuffleExchangeExec(
@@ -114,7 +128,7 @@ case class ColumnarGuardRule() extends Rule[SparkPlan] {
             plan.child)
         case plan: ShuffledHashJoinExec =>
           if (!enableColumnarShuffledHashJoin) return false
-          ColumnarShuffledHashJoinExec(
+          val transformer = ShuffledHashJoinExecTransformer(
             plan.leftKeys,
             plan.rightKeys,
             plan.joinType,
@@ -122,52 +136,54 @@ case class ColumnarGuardRule() extends Rule[SparkPlan] {
             plan.condition,
             plan.left,
             plan.right)
-        case plan: BroadcastExchangeExec =>
-          if (!enableColumnarBroadcastExchange) return false
-          ColumnarBroadcastExchangeExec(plan.mode, plan.child)
-        case plan: BroadcastHashJoinExec =>
-          // We need to check if BroadcastExchangeExec can be converted to columnar-based.
-          // If not, BHJ should also be row-based.
-          if (!enableColumnarBroadcastJoin) return false
-          val left = plan.left
-          left match {
-            case exec: BroadcastExchangeExec =>
-              new ColumnarBroadcastExchangeExec(exec.mode, exec.child)
-            case BroadcastQueryStageExec(_, plan: BroadcastExchangeExec) =>
-              new ColumnarBroadcastExchangeExec(plan.mode, plan.child)
-            case BroadcastQueryStageExec(_, plan: ReusedExchangeExec) =>
-              plan match {
-                case ReusedExchangeExec(_, b: BroadcastExchangeExec) =>
-                  new ColumnarBroadcastExchangeExec(b.mode, b.child)
-                case _ =>
-              }
-            case _ =>
-          }
-          val right = plan.right
-          right match {
-            case exec: BroadcastExchangeExec =>
-              new ColumnarBroadcastExchangeExec(exec.mode, exec.child)
-            case BroadcastQueryStageExec(_, plan: BroadcastExchangeExec) =>
-              new ColumnarBroadcastExchangeExec(plan.mode, plan.child)
-            case BroadcastQueryStageExec(_, plan: ReusedExchangeExec) =>
-              plan match {
-                case ReusedExchangeExec(_, b: BroadcastExchangeExec) =>
-                  new ColumnarBroadcastExchangeExec(b.mode, b.child)
-                case _ =>
-              }
-            case _ =>
-          }
-          ColumnarBroadcastHashJoinExec(
-            plan.leftKeys,
-            plan.rightKeys,
-            plan.joinType,
-            plan.buildSide,
-            plan.condition,
-            plan.left,
-            plan.right)
+          if (!transformer.doValidate()) return false
+          transformer
+//        case plan: BroadcastExchangeExec =>
+//          if (!enableColumnarBroadcastExchange) return false
+//          ColumnarBroadcastExchangeExec(plan.mode, plan.child)
+//        case plan: BroadcastHashJoinExec =>
+//          // We need to check if BroadcastExchangeExec can be converted to columnar-based.
+//          // If not, BHJ should also be row-based.
+//          if (!enableColumnarBroadcastJoin) return false
+//          val left = plan.left
+//          left match {
+//            case exec: BroadcastExchangeExec =>
+//              new ColumnarBroadcastExchangeExec(exec.mode, exec.child)
+//            case BroadcastQueryStageExec(_, plan: BroadcastExchangeExec) =>
+//              new ColumnarBroadcastExchangeExec(plan.mode, plan.child)
+//            case BroadcastQueryStageExec(_, plan: ReusedExchangeExec) =>
+//              plan match {
+//                case ReusedExchangeExec(_, b: BroadcastExchangeExec) =>
+//                  new ColumnarBroadcastExchangeExec(b.mode, b.child)
+//                case _ =>
+//              }
+//            case _ =>
+//          }
+//          val right = plan.right
+//          right match {
+//            case exec: BroadcastExchangeExec =>
+//              new ColumnarBroadcastExchangeExec(exec.mode, exec.child)
+//            case BroadcastQueryStageExec(_, plan: BroadcastExchangeExec) =>
+//              new ColumnarBroadcastExchangeExec(plan.mode, plan.child)
+//            case BroadcastQueryStageExec(_, plan: ReusedExchangeExec) =>
+//              plan match {
+//                case ReusedExchangeExec(_, b: BroadcastExchangeExec) =>
+//                  new ColumnarBroadcastExchangeExec(b.mode, b.child)
+//                case _ =>
+//              }
+//            case _ =>
+//          }
+//          ColumnarBroadcastHashJoinExec(
+//            plan.leftKeys,
+//            plan.rightKeys,
+//            plan.joinType,
+//            plan.buildSide,
+//            plan.condition,
+//            plan.left,
+//            plan.right)
         case plan: SortMergeJoinExec =>
           if (!enableColumnarSortMergeJoin || plan.joinType == FullOuter) return false
-          new ColumnarSortMergeJoinExec(
+          val transformer = SortMergeJoinExecTransformer(
             plan.leftKeys,
             plan.rightKeys,
             plan.joinType,
@@ -175,16 +191,21 @@ case class ColumnarGuardRule() extends Rule[SparkPlan] {
             plan.left,
             plan.right,
             plan.isSkewJoin)
+          if (!transformer.doValidate()) return false
+          transformer
         case plan: WindowExec =>
           if (!enableColumnarWindow) return false
-          val window = ColumnarWindowExec.createWithOptimizations(
+          val transformer = WindowExecTransformer(
             plan.windowExpression,
             plan.partitionSpec,
             plan.orderSpec,
             plan.child)
-          window
+          if (!transformer.doValidate()) return false
+          transformer
         case plan: CoalesceExec =>
-          ColumnarCoalesceExec(plan.numPartitions, plan.child)
+          val transformer = CoalesceExecTransformer(plan.numPartitions, plan.child)
+          if (!transformer.doValidate()) return false
+          transformer
         case p =>
           p
       }
@@ -205,7 +226,7 @@ case class ColumnarGuardRule() extends Rule[SparkPlan] {
             .map(_.getClass)})")
         return false
     }
-    return true
+    true
   }
 
   private def existsMultiCodegens(plan: SparkPlan, count: Int = 0): Boolean =
@@ -252,15 +273,15 @@ case class ColumnarGuardRule() extends Rule[SparkPlan] {
   }
 
   /**
-   * Inserts a WholeStageCodegen on top of those that support codegen.
+   * Inserts a RowGuard on top of those that are not supported.
    */
   private def insertRowGuardOrNot(plan: SparkPlan): SparkPlan = {
     plan match {
       // For operators that will output domain object, do not insert WholeStageCodegen for it as
       // domain object can not be written into unsafe row.
-      case plan if !preferColumnar && existsMultiCodegens(plan) =>
-        insertRowGuardRecursive(plan)
-      case plan if !tryConvertToColumnar(plan) =>
+//      case plan if !preferColumnar && existsMultiCodegens(plan) =>
+//        insertRowGuardRecursive(plan)
+      case plan if !tryConvertToTransformer(plan) =>
         insertRowGuard(plan)
       case p: BroadcastQueryStageExec =>
         p
