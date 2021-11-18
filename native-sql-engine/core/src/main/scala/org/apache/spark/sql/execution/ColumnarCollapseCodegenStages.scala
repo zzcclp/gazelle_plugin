@@ -118,99 +118,9 @@ case class ColumnarCollapseCodegenStages(
     codegenStageCounter: AtomicInteger = new AtomicInteger(0))
     extends Rule[SparkPlan] {
 
-  private def supportCodegen(plan: SparkPlan): Boolean = plan match {
+  private def supportTransform(plan: SparkPlan): Boolean = plan match {
     case plan: TransformSupport => true
     case _ => false
-  }
-
-  private def containsSubquery(expr: Expression): Boolean = {
-    if (expr == null) false
-    else {
-      ExpressionConverter.containsSubquery(expr)
-    }
-  }
-
-  private def containsSubquery(exprs: Seq[Expression]): Boolean = {
-    if (exprs == null) false
-    else {
-      exprs.map(ExpressionConverter.containsSubquery).exists(_ == true)
-    }
-  }
-
-  private def existsJoins(plan: SparkPlan, count: Int = 0): Boolean = plan match {
-    case p: BroadcastHashJoinExecTransformer =>
-      if (p.condition.isDefined) return true
-      if (count >= 1) true
-      else plan.children.map(existsJoins(_, count + 1)).exists(_ == true)
-    case p: ShuffledHashJoinExecTransformer =>
-      if (p.condition.isDefined) return true
-      if (count >= 1) true
-      else plan.children.map(existsJoins(_, count + 1)).exists(_ == true)
-    case p: SortMergeJoinExecTransformer =>
-      true
-    case p: HashAggregateExecTransformer =>
-      if (count >= 1) true
-      else plan.children.map(existsJoins(_, count + 1)).exists(_ == true)
-    case p: ConditionProjectExecTransformer
-        if (containsSubquery(p.condition) || containsSubquery(p.projectList)) =>
-      false
-    case p: TransformSupport =>
-      plan.children.map(existsJoins(_, count)).exists(_ == true)
-    case _ =>
-      false
-  }
-
-  private def containsExpression(expr: Expression): Boolean = expr match {
-    case a: Alias =>
-      containsExpression(a.child)
-    case a: AttributeReference =>
-      false
-    case other =>
-      true
-  }
-
-  private def containsExpression(projectList: Seq[NamedExpression]): Boolean = {
-    projectList.exists(containsExpression)
-  }
-
-  private def joinOptimization(
-      plan: ConditionProjectExecTransformer,
-      skip_smj: Boolean = false): SparkPlan = plan.child match {
-    case p: BroadcastHashJoinExecTransformer
-        if plan.condition == null && !containsExpression(plan.projectList) =>
-      BroadcastHashJoinExecTransformer(
-        p.leftKeys,
-        p.rightKeys,
-        p.joinType,
-        p.buildSide,
-        p.condition,
-        p.left,
-        p.right,
-        plan.projectList,
-        nullAware = p.isNullAwareAntiJoin)
-    case p: ShuffledHashJoinExecTransformer
-        if plan.condition == null && !containsExpression(plan.projectList) =>
-      ShuffledHashJoinExecTransformer(
-        p.leftKeys,
-        p.rightKeys,
-        p.joinType,
-        p.buildSide,
-        p.condition,
-        p.left,
-        p.right,
-        plan.projectList)
-    case p: SortMergeJoinExecTransformer
-        if !skip_smj && plan.condition == null && !containsExpression(plan.projectList) =>
-      SortMergeJoinExecTransformer(
-        p.leftKeys,
-        p.rightKeys,
-        p.joinType,
-        p.condition,
-        p.left,
-        p.right,
-        p.isSkewJoin,
-        plan.projectList)
-    case other => plan
   }
 
   /**
@@ -218,127 +128,19 @@ case class ColumnarCollapseCodegenStages(
    */
   private def insertInputAdapter(plan: SparkPlan): SparkPlan = {
     plan match {
-      case p if !supportCodegen(p) =>
+      case p if !supportTransform(p) =>
         new ColumnarInputAdapter(insertWholeStageTransformer(p))
-      case p: ConditionProjectExecTransformer
-          if (containsSubquery(p.condition) || containsSubquery(p.projectList)) =>
-        new ColumnarInputAdapter(p.withNewChildren(p.children.map(insertWholeStageTransformer)))
-      case j: SortMergeJoinExecTransformer
-          if j.buildPlan.isInstanceOf[SortMergeJoinExecTransformer] || (j.buildPlan
-            .isInstanceOf[ConditionProjectExecTransformer] && j.buildPlan
-            .children(0)
-            .isInstanceOf[SortMergeJoinExecTransformer]) =>
-        // we don't support any ColumnarSortMergeJoin whose both children are ColumnarSortMergeJoin
-        j.withNewChildren(j.children.map(c => {
-          if (c.equals(j.buildPlan)) {
-            new ColumnarInputAdapter(insertWholeStageTransformer(c))
-          } else {
-            insertInputAdapter(c)
-          }
-        }))
-      case j: HashAggregateExecTransformer =>
-        j.child match {
-          case trans: ConditionProjectExecTransformer =>
-            j.withNewChildren(j.children.map(insertInputAdapter))
-          case other =>
-            new ColumnarInputAdapter(insertWholeStageTransformer(j))
-        }
-      case j: SortExecTransformer =>
-        j.withNewChildren(
-          j.children.map(child => new ColumnarInputAdapter(insertWholeStageTransformer(child))))
       case p =>
-        p match {
-          case exec: ConditionProjectExecTransformer =>
-            val after_opt = joinOptimization(exec)
-            if (after_opt.isInstanceOf[ConditionProjectExecTransformer]) {
-              after_opt.withNewChildren(after_opt.children.map(c => {
-                if (c.isInstanceOf[SortExecTransformer]) {
-                  new ColumnarInputAdapter(insertWholeStageTransformer(c))
-                } else {
-                  insertInputAdapter(c)
-                }
-              }))
-            } else {
-              after_opt.withNewChildren(after_opt.children.map(c => {
-                insertInputAdapter(c)
-              }))
-            }
-          case _ =>
-            p.withNewChildren(p.children.map(insertInputAdapter))
-        }
+        p.withNewChildren(p.children.map(insertInputAdapter))
     }
   }
 
-  /**
-   * Inserts a WholeStageCodegen on top of those that support codegen.
-   */
-//  private def insertWholeStageCodegen(plan: SparkPlan): SparkPlan = {
-//    plan match {
-//      // For operators that will output domain object, do not insert WholeStageCodegen for it as
-//      // domain object can not be written into unsafe row.
-//      case plan
-//          if plan.output.length == 1 && plan.output.head.dataType.isInstanceOf[ObjectType] =>
-//        plan.withNewChildren(plan.children.map(insertWholeStageCodegen))
-//      case j: ColumnarHashAggregateExec =>
-//        if (!j.child.isInstanceOf[ColumnarHashAggregateExec] && existsJoins(j)) {
-//          ColumnarWholeStageCodegenExec(j.withNewChildren(j.children.map(insertInputAdapter)))(
-//            codegenStageCounter.incrementAndGet())
-//        } else {
-//          j.withNewChildren(j.children.map(insertWholeStageCodegen))
-//        }
-//      case s: ColumnarSortExec =>
-//        /*If ColumnarSort is not ahead of ColumnarSMJ, we should not do wscg for it*/
-//        s.withNewChildren(s.children.map(insertWholeStageCodegen))
-//      case plan: ColumnarTransformSupport if supportCodegen(plan) && existsJoins(plan) =>
-//        ColumnarWholeStageCodegenExec(insertInputAdapter(plan))(
-//          codegenStageCounter.incrementAndGet())
-//      case other =>
-//        if (other.isInstanceOf[ColumnarConditionProjectExec]) {
-//          val after_opt =
-//            joinOptimization(other.asInstanceOf[ColumnarConditionProjectExec], skip_smj = true)
-//          after_opt.withNewChildren(after_opt.children.map(insertWholeStageCodegen))
-//        } else {
-//          other.withNewChildren(other.children.map(insertWholeStageCodegen))
-//        }
-//    }
-//  }
-
-  /**
-   * Inserts a WholeStageTransformer on top of those that support columnar transform.
-   */
-//  private def insertWholeStageTransformer(plan: SparkPlan): SparkPlan = {
-//    plan match {
-//      case j: ColumnarHashAggregateExec =>
-//        if (j.child.isInstanceOf[ColumnarShuffledHashJoinExec]) {
-//          ColumnarWholeStageTransformerExec(
-//            j.withNewChildren(j.children.map(insertInputAdapter)))(
-//            codegenStageCounter.incrementAndGet())
-//        } else {
-//          j.withNewChildren(j.children.map(insertWholeStageTransformer))
-//        }
-//      case other =>
-//        other.withNewChildren(other.children.map(insertWholeStageTransformer))
-//    }
-//  }
-
   private def insertWholeStageTransformer(plan: SparkPlan): SparkPlan = {
     plan match {
-      case a: HashAggregateExecTransformer =>
-        if (a.child.isInstanceOf[ConditionProjectExecTransformer]) {
+      case t: TransformSupport =>
           WholeStageTransformerExec(
-            a.withNewChildren(a.children.map(insertInputAdapter)))(
+            t.withNewChildren(t.children.map(insertInputAdapter)))(
             codegenStageCounter.incrementAndGet())
-        } else if (a.child.isInstanceOf[HashAggregateExecTransformer]) {
-          WholeStageTransformerExec(
-            a.withNewChildren(a.children.map(insertInputAdapter)))(
-            codegenStageCounter.incrementAndGet())
-        } else {
-          a.withNewChildren(a.children.map(insertWholeStageTransformer))
-        }
-//      case c: ColumnarConditionProjectExec =>
-//        ColumnarWholeStageTransformerExec(
-//          c.withNewChildren(c.children.map(insertInputAdapter)))(
-//          codegenStageCounter.incrementAndGet())
       case other =>
         other.withNewChildren(other.children.map(insertWholeStageTransformer))
     }
