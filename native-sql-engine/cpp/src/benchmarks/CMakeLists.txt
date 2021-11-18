@@ -1,3 +1,0 @@
-package_add_benchmark(WholeStageTransformTest ws_transform_test.cc)
-package_add_benchmark(SimulatedQueryTest simulated_q1_test.cc)
-package_add_benchmark(FullDataSimulateTest simulated_q6_test.cc)

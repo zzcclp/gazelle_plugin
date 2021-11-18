@@ -38,6 +38,7 @@
 #include "proto/substrait_utils.h"
 
 static jclass io_exception_class;
+static jclass runtime_exception_class;
 static jclass unsupportedoperation_exception_class;
 static jclass illegal_access_exception_class;
 static jclass illegal_argument_exception_class;

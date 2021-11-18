@@ -455,43 +455,6 @@ set(PROTO_HDRS ${PROTO_HDRS} "${PROTO_OUTPUT_DIR}/selection.pb.h")
 set(PROTO_HDRS ${PROTO_HDRS} "${PROTO_OUTPUT_DIR}/type_expressions.pb.h")
 set(PROTO_HDRS ${PROTO_HDRS} "${PROTO_OUTPUT_DIR}/type.pb.h")
 
-if(TESTS)
-  find_package(GTest)
-macro(package_add_test TESTNAME)
-  add_executable(${TESTNAME} ${ARGN})
-  target_link_libraries(${TESTNAME} gtest gtest_main spark_columnar_jni dl ${CMAKE_THREAD_LIBS_INIT})
-  target_include_directories(${TESTNAME} PUBLIC ${source_root_directory})
-  gtest_discover_tests(${TESTNAME}
-    WORKING_DIRECTORY ${PROJECT_DIR}
-    PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_DIR}"
-  )
-  set_target_properties(${TESTNAME} PROPERTIES FOLDER tests)
-endmacro()
-  include(GoogleTest)
-  ENABLE_TESTING()
-  add_custom_target(test ${CMAKE_CTEST_COMMAND} -R TestArrowCompute --output-on-failure)
-  add_subdirectory(tests)
-endif()
-
-if(BENCHMARKS)
-  find_package(GTest)
-  add_definitions(-DBENCHMARK_FILE_PATH="file://${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/source_files/")
-macro(package_add_benchmark TESTNAME)
-  add_executable(${TESTNAME} ${ARGN})
-  target_link_libraries(${TESTNAME} gtest gtest_main spark_columnar_jni parquet ${CMAKE_THREAD_LIBS_INIT})
-  target_include_directories(${TESTNAME} PUBLIC ${source_root_directory})
-  gtest_discover_tests(${TESTNAME}
-    WORKING_DIRECTORY ${PROJECT_DIR}
-    PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_DIR}"
-  )
-  set_target_properties(${TESTNAME} PROPERTIES FOLDER tests)
-endmacro()
-  include(GoogleTest)
-  ENABLE_TESTING()
-  add_custom_target(benchmark ${CMAKE_CTEST_COMMAND} -R BenchmarkArrowCompute --output-on-failure)
-  add_subdirectory(benchmarks)
-endif()
-
 set(CODEGEN_HEADERS
     third_party/
     )
@@ -505,18 +468,8 @@ file(MAKE_DIRECTORY ${root_directory}/releases/include/codegen/utils/)
 file(MAKE_DIRECTORY ${root_directory}/releases/include/codegen/arrow_compute/ext/)
 file(COPY third_party/ DESTINATION ${root_directory}/releases/include/)
 file(COPY third_party/ DESTINATION ${root_directory}/releases/include/third_party/)
-file(COPY precompile/ DESTINATION ${root_directory}/releases/include/precompile/)
 file(COPY utils/ DESTINATION ${root_directory}/releases/include/utils/)
-file(COPY codegen/arrow_compute/ext/array_item_index.h DESTINATION ${root_directory}/releases/include/codegen/arrow_compute/ext/)
-file(COPY codegen/arrow_compute/ext/actions_impl.h DESTINATION ${root_directory}/releases/include/codegen/arrow_compute/ext/)
-file(COPY codegen/arrow_compute/ext/code_generator_base.h DESTINATION ${root_directory}/releases/include/codegen/arrow_compute/ext/)
-file(COPY codegen/arrow_compute/ext/kernels_ext.h DESTINATION ${root_directory}/releases/include/codegen/arrow_compute/ext/)
 file(COPY codegen/common/result_iterator.h DESTINATION ${root_directory}/releases/include/codegen/common/)
-file(COPY codegen/common/relation_column.h DESTINATION ${root_directory}/releases/include/codegen/common/)
-file(COPY codegen/common/hash_relation.h DESTINATION ${root_directory}/releases/include/codegen/common/)
-file(COPY codegen/common/sort_relation.h DESTINATION ${root_directory}/releases/include/codegen/common/)
-file(COPY codegen/common/hash_relation_string.h DESTINATION ${root_directory}/releases/include/codegen/common/)
-file(COPY codegen/common/hash_relation_number.h DESTINATION ${root_directory}/releases/include/codegen/common/)
 
 add_definitions(-DNATIVESQL_SRC_PATH="${root_directory}/releases")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations -Wno-attributes")
@@ -525,38 +478,7 @@ set(SPARK_COLUMNAR_PLUGIN_SRCS
         ${PROTO_SRCS}
         proto/protobuf_utils.cc
         proto/substrait_utils.cc
-        codegen/common/relation.cc
-        codegen/expr_visitor.cc
-        codegen/arrow_compute/expr_visitor.cc
-        codegen/arrow_compute/ext/hash_aggregate_kernel.cc
-        codegen/arrow_compute/ext/probe_kernel.cc
-        codegen/arrow_compute/ext/merge_join_kernel.cc
-        codegen/arrow_compute/ext/codegen_common.cc
-        codegen/arrow_compute/ext/codegen_node_visitor.cc
-        codegen/arrow_compute/ext/codegen_register.cc
-        codegen/arrow_compute/ext/actions_impl.cc
-        codegen/arrow_compute/ext/whole_stage_codegen_kernel.cc
-        codegen/arrow_compute/ext/whole_stage_transform_kernel.cc
-        codegen/arrow_compute/ext/hash_relation_kernel.cc
-        codegen/arrow_compute/ext/conditioned_probe_kernel.cc
-        codegen/arrow_compute/ext/conditioned_merge_join_kernel.cc
-        codegen/arrow_compute/ext/basic_physical_kernels.cc
-        codegen/arrow_compute/ext/expression_codegen_visitor.cc
-        codegen/arrow_compute/ext/typed_node_visitor.cc
-        codegen/arrow_compute/ext/window_kernel.cc
-        codegen/arrow_compute/ext/sort_kernel.cc
-        codegen/arrow_compute/ext/kernels_ext.cc
-        shuffle/splitter.cc
         operators/columnar_to_row_converter.cc
-        precompile/hash_map.cc
-        precompile/sparse_hash_map.cc
-        precompile/builder.cc
-        precompile/array.cc
-        precompile/type.cc
-        precompile/sort.cc
-        precompile/hash_arrays_kernel.cc
-        precompile/unsafe_array.cc
-        precompile/gandiva_projector.cc
         third_party/gandiva/decimal_ops.cc
         third_party/gandiva/time.cc
         )
