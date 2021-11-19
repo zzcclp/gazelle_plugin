@@ -428,10 +428,8 @@ set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/type.pb.h")
 
 set_source_files_properties(${PROTO_OUTPUT_FILES} PROPERTIES GENERATED TRUE)
 
-get_filename_component(ABS_GANDIVA_PROTO ${CMAKE_CURRENT_SOURCE_DIR}/proto/,
+get_filename_component(SUBSTRAIT_PROTO ${CMAKE_CURRENT_SOURCE_DIR}/proto/,
                        DIRECTORY)
-# get_filename_component(ABS_GANDIVA_PROTO ${CMAKE_CURRENT_SOURCE_DIR}/proto/expression.proto
-#                        ABSOLUTE)
 
 set(PROTO_SRCS "${PROTO_OUTPUT_DIR}/Exprs.pb.cc")
 set(PROTO_SRCS ${PROTO_SRCS} "${PROTO_OUTPUT_DIR}/expression.pb.cc")
@@ -466,10 +464,7 @@ file(MAKE_DIRECTORY ${root_directory}/releases/include/codegen/third_party/)
 file(MAKE_DIRECTORY ${root_directory}/releases/include/codegen/precompile/)
 file(MAKE_DIRECTORY ${root_directory}/releases/include/codegen/utils/)
 file(MAKE_DIRECTORY ${root_directory}/releases/include/codegen/arrow_compute/ext/)
-file(COPY third_party/ DESTINATION ${root_directory}/releases/include/)
-file(COPY third_party/ DESTINATION ${root_directory}/releases/include/third_party/)
-file(COPY utils/ DESTINATION ${root_directory}/releases/include/utils/)
-file(COPY codegen/common/result_iterator.h DESTINATION ${root_directory}/releases/include/codegen/common/)
+file(COPY common/result_iterator.h DESTINATION ${root_directory}/releases/include/common/)
 
 add_definitions(-DNATIVESQL_SRC_PATH="${root_directory}/releases")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations -Wno-attributes")
@@ -479,14 +474,10 @@ set(SPARK_COLUMNAR_PLUGIN_SRCS
         proto/protobuf_utils.cc
         proto/substrait_utils.cc
         operators/columnar_to_row_converter.cc
-        third_party/gandiva/decimal_ops.cc
-        third_party/gandiva/time.cc
         )
 
-add_subdirectory(third_party/gandiva)
-message(STATUS "thirdparty is ${THIRDPARTY_GANDIVA_SRCS}")
 file(MAKE_DIRECTORY ${root_directory}/releases)
-add_library(spark_columnar_jni SHARED ${SPARK_COLUMNAR_PLUGIN_SRCS} ${THIRDPARTY_GANDIVA_SRCS})
+add_library(spark_columnar_jni SHARED ${SPARK_COLUMNAR_PLUGIN_SRCS})
 add_dependencies(spark_columnar_jni jni_proto)
 
 if(BUILD_PROTOBUF)
@@ -517,7 +508,7 @@ add_custom_command(OUTPUT ${PROTO_OUTPUT_FILES}
                            ${CMAKE_CURRENT_SOURCE_DIR}/proto/selection.proto
                            ${CMAKE_CURRENT_SOURCE_DIR}/proto/type_expressions.proto
                            ${CMAKE_CURRENT_SOURCE_DIR}/proto/type.proto
-                   DEPENDS  ${ABS_GANDIVA_PROTO}
+                   DEPENDS  ${SUBSTRAIT_PROTO}
                    COMMENT "Running PROTO compiler on Exprs.proto"
                    VERBATIM)
 add_custom_target(jni_proto ALL DEPENDS ${PROTO_OUTPUT_FILES})

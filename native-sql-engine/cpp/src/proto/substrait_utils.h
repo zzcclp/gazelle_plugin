@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include "codegen/common/result_iterator.h"
+#include "common/result_iterator.h"
 #include "expression.pb.h"
 #include "extensions.pb.h"
 #include "function.pb.h"

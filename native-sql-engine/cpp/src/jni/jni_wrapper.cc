@@ -35,7 +35,7 @@
 #include <string>
 #include <utility>
 
-#include "codegen/common/result_iterator.h"
+#include "common/result_iterator.h"
 #include "jni/concurrent_map.h"
 #include "jni/jni_common.h"
 #include "operators/columnar_to_row_converter.h"
