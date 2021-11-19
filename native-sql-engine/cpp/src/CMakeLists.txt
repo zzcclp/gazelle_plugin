@@ -36,6 +36,8 @@ set(JEMALLOC_BUILD_VERSION "5.2.1")
 
 find_package(JNI REQUIRED)
 set(source_root_directory ${CMAKE_CURRENT_SOURCE_DIR})
+set(substrait_proto_directory ${CMAKE_CURRENT_SOURCE_DIR}/../../core/src/main/java/com/intel/oap/substrait/binary)
+message(STATUS "Set Substrait Directory in ${substrait_proto_directory}")
 
 find_program(CCACHE_FOUND ccache)
 if(CCACHE_FOUND)
@@ -428,7 +430,7 @@ set(PROTO_OUTPUT_FILES ${PROTO_OUTPUT_FILES} "${PROTO_OUTPUT_DIR}/type.pb.h")
 
 set_source_files_properties(${PROTO_OUTPUT_FILES} PROPERTIES GENERATED TRUE)
 
-get_filename_component(SUBSTRAIT_PROTO ${CMAKE_CURRENT_SOURCE_DIR}/proto/,
+get_filename_component(SUBSTRAIT_PROTO ${substrait_proto_directory}/,
                        DIRECTORY)
 
 set(PROTO_SRCS "${PROTO_OUTPUT_DIR}/Exprs.pb.cc")
@@ -495,19 +497,19 @@ endif()
 add_custom_command(OUTPUT ${PROTO_OUTPUT_FILES}
                    COMMAND ${PROTOC_BIN}
                            --proto_path
-                           ${CMAKE_CURRENT_SOURCE_DIR}/proto
+                           ${substrait_proto_directory}/
                            --cpp_out
                            ${PROTO_OUTPUT_DIR}
-                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/Exprs.proto
-                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/expression.proto
-                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/extensions.proto
-                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/function.proto
-                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/parameterized_types.proto
-                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/plan.proto
-                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/relations.proto
-                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/selection.proto
-                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/type_expressions.proto
-                           ${CMAKE_CURRENT_SOURCE_DIR}/proto/type.proto
+                           ${substrait_proto_directory}/Exprs.proto
+                           ${substrait_proto_directory}/expression.proto
+                           ${substrait_proto_directory}/extensions.proto
+                           ${substrait_proto_directory}/function.proto
+                           ${substrait_proto_directory}/parameterized_types.proto
+                           ${substrait_proto_directory}/plan.proto
+                           ${substrait_proto_directory}/relations.proto
+                           ${substrait_proto_directory}/selection.proto
+                           ${substrait_proto_directory}/type_expressions.proto
+                           ${substrait_proto_directory}/type.proto
                    DEPENDS  ${SUBSTRAIT_PROTO}
                    COMMENT "Running PROTO compiler on Exprs.proto"
                    VERBATIM)
