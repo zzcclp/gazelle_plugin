@@ -327,14 +327,6 @@ Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeSetBatchSize(
 }
 
 JNIEXPORT void JNICALL
-Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeSetSortSpillThreshold(
-    JNIEnv* env, jobject obj, jlong spill_size) {
-  JNI_METHOD_START
-  setenv("NATIVESQL_MAX_MEMORY_SIZE", std::to_string(spill_size).c_str(), 1);
-  JNI_METHOD_END()
-}
-
-JNIEXPORT void JNICALL
 Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeSetMetricsTime(
     JNIEnv* env, jobject obj, jboolean is_enable) {
   setenv("NATIVESQL_METRICS_TIME", (is_enable ? "true" : "false"), 1);

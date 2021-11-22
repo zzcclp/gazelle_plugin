@@ -73,8 +73,7 @@ case class HashAggregateExecTransformer(
     resultExpressions: Seq[NamedExpression],
     child: SparkPlan)
     extends BaseAggregateExec
-    with TransformSupport
-    with AliasAwareOutputPartitioning {
+    with TransformSupport {
 
   val sparkConf = sparkContext.getConf
 
@@ -82,14 +81,15 @@ case class HashAggregateExecTransformer(
 
   val resAttributes: Seq[Attribute] = resultExpressions.map(_.toAttribute)
 
+  override lazy val allAttributes: AttributeSeq =
+    child.output ++ aggregateBufferAttributes ++ aggregateAttributes ++
+      aggregateExpressions.flatMap(_.aggregateFunction.inputAggBufferAttributes)
+
   // Members declared in org.apache.spark.sql.execution.AliasAwareOutputPartitioning
   override protected def outputExpressions: Seq[NamedExpression] = resultExpressions
 
   // Members declared in org.apache.spark.sql.execution.CodegenSupport
   protected def doProduce(ctx: CodegenContext): String = throw new UnsupportedOperationException()
-
-  // Members declared in org.apache.spark.sql.catalyst.plans.QueryPlan
-  override def output: Seq[Attribute] = resAttributes
 
   // Members declared in org.apache.spark.sql.execution.SparkPlan
   protected override def doExecute()
