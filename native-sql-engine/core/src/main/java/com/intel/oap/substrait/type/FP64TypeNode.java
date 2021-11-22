@@ -30,8 +30,7 @@ public class FP64TypeNode implements TypeNode {
 
     @Override
     public Type toProtobuf() {
-        Type.Variation.Builder variationBuilder =
-                Type.Variation.newBuilder();
+        Type.Variation.Builder variationBuilder = Type.Variation.newBuilder();
         variationBuilder.setName(name);
 
         Type.FP64.Builder doubleBuilder = Type.FP64.newBuilder();

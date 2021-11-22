@@ -17,6 +17,7 @@
 
 package com.intel.oap.expression
 
+import com.google.common.collect.Lists
 import com.intel.oap.substrait.expression.{ExpressionBuilder, ExpressionNode}
 import org.apache.arrow.gandiva.evaluator._
 import org.apache.arrow.gandiva.exceptions.GandivaException
@@ -34,7 +35,24 @@ class AliasTransformer(child: Expression, name: String)(
     override val explicitMetadata: Option[Metadata])
     extends Alias(child, name)(exprId, qualifier, explicitMetadata)
     with ExpressionTransformer {
-  override def doTransform(args: java.lang.Object): ExpressionNode = null
+  override def doTransform(args: java.lang.Object): ExpressionNode = {
+    val child_node = child.asInstanceOf[ExpressionTransformer].doTransform(args)
+    if (!child_node.isInstanceOf[ExpressionNode]) {
+      throw new UnsupportedOperationException(s"not supported yet")
+    }
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
+    val functionName = "ALIAS"
+    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
+    if (!functionMap.containsKey(functionName)) {
+      functionMap.put(functionName, functionId)
+    } else {
+      functionId = functionMap.get(functionName)
+    }
+    val expressNodes = Lists.newArrayList(child_node.asInstanceOf[ExpressionNode])
+    val typeNode = ConverterUtils.getTypeNode(child.dataType, name, child.nullable)
+
+    ExpressionBuilder.makeScalarFunction(functionId, expressNodes, typeNode)
+  }
 }
 
 class AttributeReferenceTransformer(

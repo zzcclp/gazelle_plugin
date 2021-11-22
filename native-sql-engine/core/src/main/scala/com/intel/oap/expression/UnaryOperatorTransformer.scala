@@ -139,7 +139,24 @@ class CastTransformer(
     extends Cast(child: Expression, datatype: DataType, timeZoneId: Option[String])
     with ExpressionTransformer
     with Logging {
-  override def doTransform(args: java.lang.Object): ExpressionNode = null
+  override def doTransform(args: java.lang.Object): ExpressionNode = {
+    val child_node = child.asInstanceOf[ExpressionTransformer].doTransform(args)
+    if (!child_node.isInstanceOf[ExpressionNode]) {
+      throw new UnsupportedOperationException(s"not supported yet.")
+    }
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
+    val functionName = "CAST"
+    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
+    if (!functionMap.containsKey(functionName)) {
+      functionMap.put(functionName, functionId)
+    } else {
+      functionId = functionMap.get(functionName)
+    }
+    val expressNodes = Lists.newArrayList(child_node.asInstanceOf[ExpressionNode])
+    val typeNode = ConverterUtils.getTypeNode(dataType, "res", nullable = true)
+
+    ExpressionBuilder.makeScalarFunction(functionId, expressNodes, typeNode)
+  }
 }
 
 class UnscaledValueTransformer(child: Expression, original: Expression)

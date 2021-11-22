@@ -400,6 +400,8 @@ object ConverterUtils extends Logging {
         TypeBuiler.makeBoolean(name, nullable)
       case DoubleType =>
         TypeBuiler.makeFP64(name, nullable)
+      case StringType =>
+        TypeBuiler.makeString(name, nullable)
       case unknown =>
         throw new UnsupportedOperationException(s"Type $unknown not supported")
     }

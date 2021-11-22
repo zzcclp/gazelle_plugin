@@ -43,8 +43,12 @@ public class RelBuilder {
 
   public static RelNode makeAggregateRel(RelNode input,
                                          ArrayList<Integer> groupings,
-                                         ArrayList<AggregateFunctionNode> aggregateFunctionNodes) {
-    return new AggregateRelNode(input, groupings, aggregateFunctionNodes);
+                                         ArrayList<AggregateFunctionNode> aggregateFunctionNodes,
+                                         ArrayList<TypeNode> inputTypeNodes,
+                                         ArrayList<TypeNode> outputTypeNodes,
+                                         ArrayList<ExpressionNode> resExprNodes) {
+    return new AggregateRelNode(input, groupings, aggregateFunctionNodes,
+                                inputTypeNodes, outputTypeNodes, resExprNodes);
   }
 
   public static RelNode makeReadRel(ArrayList<TypeNode> types, ArrayList<String> names,

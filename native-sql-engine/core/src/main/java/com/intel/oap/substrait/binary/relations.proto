@@ -126,6 +126,7 @@ message AggregateRel {
     repeated Grouping groupings = 3;
     repeated Measure measures = 4;
     Expression.AggregationPhase phase = 5;
+    repeated Expression result_expressions = 6;
 
     message Grouping {
         repeated int32 input_fields = 1;
@@ -134,8 +135,8 @@ message AggregateRel {
     message Measure {
         Expression.AggregateFunction measure = 1;
     }
-    repeated Type input_types = 6;
-    repeated Type output_types = 7;
+    repeated Type input_types = 7;
+    repeated Type output_types = 8;
 }
 
 message SortRel {

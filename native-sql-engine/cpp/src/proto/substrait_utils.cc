@@ -108,7 +108,7 @@ void SubstraitParser::ParseExpression(const substrait::Expression& sexpr) {
       break;
     }
     default:
-      std::cout << "expression not supported" << std::endl;
+      std::cout << "Expression not supported" << std::endl;
       break;
   }
 }
@@ -129,13 +129,20 @@ void SubstraitParser::ParseType(const substrait::Type& stype) {
     }
     case substrait::Type::KindCase::kStruct: {
       auto sstruct = stype.struct_();
-      auto& stypes = sstruct.types();
+      auto stypes = sstruct.types();
       for (auto& type : stypes) {
         ParseType(type);
       }
+      break;
+    }
+    case substrait::Type::KindCase::kString: {
+      auto sstring = stype.string();
+      auto nullable = sstring.nullability();
+      auto name = sstring.variation().name();
+      break;
     }
     default:
-      std::cout << "type not supported" << std::endl;
+      std::cout << "Type not supported" << std::endl;
       break;
   }
 }
@@ -143,7 +150,7 @@ void SubstraitParser::ParseType(const substrait::Type& stype) {
 void SubstraitParser::ParseNamedStruct(const substrait::Type::NamedStruct& named_struct) {
   auto& snames = named_struct.names();
   for (auto& sname : snames) {
-    std::cout << "name: " << sname << std::endl;
+    std::cout << "NamedStruct name: " << sname << std::endl;
   }
   // Parse Struct
   auto& sstruct = named_struct.struct_();
@@ -162,7 +169,7 @@ void SubstraitParser::ParseAggregateRel(const substrait::AggregateRel& sagg) {
   for (auto& grouping : groupings) {
     auto grouping_fields = grouping.input_fields();
     for (auto& grouping_field : grouping_fields) {
-      std::cout << "grouping_field: " << grouping_field << std::endl;
+      std::cout << "Agg grouping_field: " << grouping_field << std::endl;
     }
   }
   // Parse measures
@@ -170,13 +177,21 @@ void SubstraitParser::ParseAggregateRel(const substrait::AggregateRel& sagg) {
     auto aggFunction = smea.measure();
     auto phase = aggFunction.phase();
     auto function_id = aggFunction.id().id();
-    std::cout << "function id: " << function_id << std::endl;
+    std::cout << "Agg Function id: " << function_id << std::endl;
     auto args = aggFunction.args();
     for (auto arg : args) {
       ParseExpression(arg);
     }
   }
   auto agg_phase = sagg.phase();
+  // Parse Input and Output types
+  std::cout << "Agg input and output:" << std::endl; 
+  for (auto& stype : sagg.input_types()) {
+    ParseType(stype);
+  }
+  for (auto& stype : sagg.output_types()) {
+    ParseType(stype);
+  }
 }
 
 void SubstraitParser::ParseProjectRel(const substrait::ProjectRel& sproject) {

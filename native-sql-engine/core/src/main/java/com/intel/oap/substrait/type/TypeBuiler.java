@@ -34,4 +34,8 @@ public class TypeBuiler {
     public static TypeNode makeStruct(ArrayList<TypeNode> types) {
         return new StructNode(types);
     }
+
+    public static TypeNode makeString(String name, Boolean nullable) {
+        return new StringTypeNode(name, nullable);
+    }
 }

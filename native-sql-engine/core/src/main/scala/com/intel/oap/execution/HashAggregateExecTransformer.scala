@@ -59,6 +59,7 @@ import org.apache.spark.unsafe.KVIterator
 
 import scala.collection.JavaConverters._
 import scala.collection.Iterator
+import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
 
 /**
@@ -232,8 +233,26 @@ case class HashAggregateExecTransformer(
         .makeAggregateFunction(childrenNodeList, mode, outputTypeNode)
       aggregateFunctionList.add(aggFunctionNode)
     })
+    // Set Input and Output types
+    val inputTypeNodes = ConverterUtils.getTypeNodeFromAttributes(originalInputAttributes)
+    val outputTypeNodes = ConverterUtils.getTypeNodeFromAttributes(resAttributes)
+    // Set ResultExpressions
+    // FIXME: allAggregateResultAttributes needs to transform?
+    val allAggregateResultAttributes: List[Attribute] =
+      groupingAttributes.toList ::: getAttrForAggregateExpr(
+        aggregateExpressions, aggregateAttributes)
+    val resExprNodes = resultExpressions.toList.map(expr => {
+      val resExpr: Expression = ExpressionConverter
+        .replaceWithExpressionTransformer(expr, allAggregateResultAttributes)
+      resExpr.asInstanceOf[ExpressionTransformer].doTransform(args)
+    })
+    val resNodeList = new util.ArrayList[ExpressionNode]()
+    for (resExpr <- resExprNodes) {
+      resNodeList.add(resExpr)
+    }
     // Get Aggregate Rel
-    RelBuilder.makeAggregateRel(input, groupingList, aggregateFunctionList)
+    RelBuilder.makeAggregateRel(input, groupingList, aggregateFunctionList,
+                                inputTypeNodes, outputTypeNodes, resNodeList)
   }
 
   private def modeToKeyWord(aggregateMode: AggregateMode): String = {
@@ -244,5 +263,132 @@ case class HashAggregateExecTransformer(
       case other =>
         throw new UnsupportedOperationException(s"not currently supported: $other.")
     }
+  }
+
+  /**
+   * This method calculates the output attributes of Aggregation.
+  */
+  def getAttrForAggregateExpr(aggregateExpressions: Seq[AggregateExpression],
+                              aggregateAttributeList: Seq[Attribute]): List[Attribute] = {
+    var aggregateAttr = new ListBuffer[Attribute]()
+    val size = aggregateExpressions.size
+    var res_index = 0
+    for (expIdx <- 0 until size) {
+      val exp: AggregateExpression = aggregateExpressions(expIdx)
+      val mode = exp.mode
+      val aggregateFunc = exp.aggregateFunction
+      aggregateFunc match {
+        case Average(_) =>
+          mode match {
+            case Partial =>
+              val avg = aggregateFunc.asInstanceOf[Average]
+              val aggBufferAttr = avg.inputAggBufferAttributes
+              for (index <- aggBufferAttr.indices) {
+                val attr = ConverterUtils.getAttrFromExpr(aggBufferAttr(index))
+                aggregateAttr += attr
+              }
+              res_index += 2
+            case PartialMerge =>
+              val avg = aggregateFunc.asInstanceOf[Average]
+              val aggBufferAttr = avg.inputAggBufferAttributes
+              for (index <- aggBufferAttr.indices) {
+                val attr = ConverterUtils.getAttrFromExpr(aggBufferAttr(index))
+                aggregateAttr += attr
+              }
+              res_index += 1
+            case Final =>
+              aggregateAttr += aggregateAttributeList(res_index)
+              res_index += 1
+            case other =>
+              throw new UnsupportedOperationException(s"not currently supported: $other.")
+          }
+        case Sum(_) =>
+          mode match {
+            case Partial | PartialMerge =>
+              val sum = aggregateFunc.asInstanceOf[Sum]
+              val aggBufferAttr = sum.inputAggBufferAttributes
+              if (aggBufferAttr.size == 2) {
+                // decimal sum check sum.resultType
+                val sum_attr = ConverterUtils.getAttrFromExpr(aggBufferAttr.head)
+                aggregateAttr += sum_attr
+                val isempty_attr = ConverterUtils.getAttrFromExpr(aggBufferAttr(1))
+                aggregateAttr += isempty_attr
+                res_index += 2
+              } else {
+                val attr = ConverterUtils.getAttrFromExpr(aggBufferAttr.head)
+                aggregateAttr += attr
+                res_index += 1
+              }
+            case Final =>
+              aggregateAttr += aggregateAttributeList(res_index)
+              res_index += 1
+            case other =>
+              throw new UnsupportedOperationException(s"not currently supported: $other.")
+          }
+        case Count(_) =>
+          mode match {
+            case Partial | PartialMerge =>
+              val count = aggregateFunc.asInstanceOf[Count]
+              val aggBufferAttr = count.inputAggBufferAttributes
+              val attr = ConverterUtils.getAttrFromExpr(aggBufferAttr.head)
+              aggregateAttr += attr
+              res_index += 1
+            case Final =>
+              aggregateAttr += aggregateAttributeList(res_index)
+              res_index += 1
+            case other =>
+              throw new UnsupportedOperationException(s"not currently supported: $other.")
+          }
+        case Max(_) =>
+          mode match {
+            case Partial | PartialMerge =>
+              val max = aggregateFunc.asInstanceOf[Max]
+              val aggBufferAttr = max.inputAggBufferAttributes
+              val attr = ConverterUtils.getAttrFromExpr(aggBufferAttr.head)
+              aggregateAttr += attr
+              res_index += 1
+            case Final =>
+              aggregateAttr += aggregateAttributeList(res_index)
+              res_index += 1
+            case other =>
+              throw new UnsupportedOperationException(s"not currently supported: $other.")
+          }
+        case Min(_) =>
+          mode match {
+            case Partial | PartialMerge =>
+              val min = aggregateFunc.asInstanceOf[Min]
+              val aggBufferAttr = min.inputAggBufferAttributes
+              val attr = ConverterUtils.getAttrFromExpr(aggBufferAttr(0))
+              aggregateAttr += attr
+              res_index += 1
+            case Final =>
+              aggregateAttr += aggregateAttributeList(res_index)
+              res_index += 1
+            case other =>
+              throw new UnsupportedOperationException(s"not currently supported: $other.")
+          }
+        case StddevSamp(_, _) =>
+          mode match {
+            case Partial =>
+              val stddevSamp = aggregateFunc.asInstanceOf[StddevSamp]
+              val aggBufferAttr = stddevSamp.inputAggBufferAttributes
+              for (index <- aggBufferAttr.indices) {
+                val attr = ConverterUtils.getAttrFromExpr(aggBufferAttr(index))
+                aggregateAttr += attr
+              }
+              res_index += 3
+            case PartialMerge =>
+              throw new UnsupportedOperationException("not currently supported: PartialMerge.")
+            case Final =>
+              aggregateAttr += aggregateAttributeList(res_index)
+              res_index += 1
+            case other =>
+              throw new UnsupportedOperationException(s"not currently supported: $other.")
+          }
+        case other =>
+          throw new UnsupportedOperationException(s"not currently supported: $other.")
+      }
+    }
+    aggregateAttr.toList
   }
 }
