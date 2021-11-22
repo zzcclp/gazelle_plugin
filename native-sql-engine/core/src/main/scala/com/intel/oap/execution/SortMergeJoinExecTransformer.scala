@@ -226,9 +226,9 @@ case class SortMergeJoinExecTransformer(
       }
   }
 
-  override def inputRDDs(): Seq[RDD[ColumnarBatch]] = streamedPlan match {
+  override def columnarInputRDDs: Seq[RDD[ColumnarBatch]] = streamedPlan match {
     case c: TransformSupport =>
-      c.inputRDDs
+      c.columnarInputRDDs
     case _ =>
       Seq(streamedPlan.executeColumnar())
   }

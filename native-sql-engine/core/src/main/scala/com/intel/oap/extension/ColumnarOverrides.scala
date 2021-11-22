@@ -67,7 +67,7 @@ case class TransformPreOverrides() extends Rule[SparkPlan] {
       ArrowEvalPythonExecTransformer(plan.udfs, plan.resultAttrs, columnarChild, plan.evalType)
     case plan: BatchScanExec =>
       logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
-      new ColumnarBatchScanExec(plan.output, plan.scan)
+      new BatchScanExecTransformer(plan.output, plan.scan)
     case plan: CoalesceExec =>
       CoalesceExecTransformer(plan.numPartitions, replaceWithTransformerPlan(plan.child))
     case plan: InMemoryTableScanExec =>

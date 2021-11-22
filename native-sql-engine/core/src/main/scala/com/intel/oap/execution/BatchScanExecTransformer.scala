@@ -18,15 +18,18 @@
 package com.intel.oap.execution
 
 import com.intel.oap.GazellePluginConfig
-import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
-import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory, Scan}
+import com.intel.oap.expression.ConverterUtils
+import com.intel.oap.substrait.rel.RelBuilder
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory, Scan}
+import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
-import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
-class ColumnarBatchScanExec(output: Seq[AttributeReference], @transient scan: Scan)
-    extends BatchScanExec(output, scan) {
+class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan: Scan)
+    extends BatchScanExec(output, scan) with TransformSupport {
   val tmpDir: String = GazellePluginConfig.getConf.tmpFile
   override def supportsColumnar(): Boolean = true
   override lazy val metrics = Map(
@@ -35,6 +38,7 @@ class ColumnarBatchScanExec(output: Seq[AttributeReference], @transient scan: Sc
     "numOutputBatches" -> SQLMetrics.createMetric(sparkContext, "output_batches"),
     "scanTime" -> SQLMetrics.createTimingMetric(sparkContext, "totaltime_batchscan"),
     "inputSize" -> SQLMetrics.createSizeMetric(sparkContext, "input size in bytes"))
+
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
     val numOutputRows = longMetric("numOutputRows")
     val numInputBatches = longMetric("numInputBatches")
@@ -50,11 +54,45 @@ class ColumnarBatchScanExec(output: Seq[AttributeReference], @transient scan: Sc
     }
   }
 
-  override def canEqual(other: Any): Boolean = other.isInstanceOf[ColumnarBatchScanExec]
+  override def canEqual(other: Any): Boolean = other.isInstanceOf[BatchScanExecTransformer]
 
   override def equals(other: Any): Boolean = other match {
-    case that: ColumnarBatchScanExec =>
+    case that: BatchScanExecTransformer =>
       (that canEqual this) && super.equals(that)
     case _ => false
+  }
+
+  override def columnarInputRDDs: Seq[RDD[ColumnarBatch]] = {
+    var RDDs = Seq[RDD[ColumnarBatch]]()
+    RDDs = RDDs :+ doExecuteColumnar()
+    RDDs
+  }
+
+  override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = {
+    Seq((this, null))
+  }
+
+  override def getStreamedLeafPlan: SparkPlan = {
+    this
+  }
+
+  override def getChild: SparkPlan = {
+    null
+  }
+
+  override def doValidate(): Boolean = false
+
+  override def doTransform(args: Object): TransformContext = {
+    val typeNodes = ConverterUtils.getTypeNodeFromAttributes(output)
+    val nameList = new java.util.ArrayList[String]()
+    for (attr <- output) {
+      nameList.add(attr.name)
+    }
+    val pathList = new java.util.ArrayList[String]()
+    val relNode = RelBuilder.makeReadRel(typeNodes, nameList, pathList)
+    val outputSchema = ConverterUtils.toArrowSchema(output)
+    // FIXME
+    val inputSchema = ConverterUtils.toArrowSchema(output)
+    TransformContext(inputSchema, outputSchema, relNode)
   }
 }

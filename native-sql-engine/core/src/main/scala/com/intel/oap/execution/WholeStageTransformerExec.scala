@@ -58,7 +58,7 @@ trait TransformSupport extends SparkPlan {
    *
    * @note Right now we support up to two RDDs
    */
-  def inputRDDs: Seq[RDD[ColumnarBatch]]
+  def columnarInputRDDs: Seq[RDD[ColumnarBatch]]
 
   def getBuildPlans: Seq[(SparkPlan, SparkPlan)]
 
@@ -259,9 +259,9 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
     ""
   }
 
-  override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
+  override def columnarInputRDDs: Seq[RDD[ColumnarBatch]] = child match {
     case c: TransformSupport =>
-      c.inputRDDs
+      c.columnarInputRDDs
     case _ =>
       throw new UnsupportedOperationException
   }
@@ -280,14 +280,19 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
     // we should zip all dependent RDDs to current main RDD
     val buildPlans = getBuildPlans
     val streamedSortPlan = getStreamedLeafPlan
-    val contains_aggregate = child.isInstanceOf[HashAggregateExecTransformer]
     val dependentKernels: ListBuffer[ExpressionEvaluator] = ListBuffer()
     val dependentKernelIterators: ListBuffer[BatchIterator] = ListBuffer()
     val buildRelationBatchHolder: ListBuffer[ColumnarBatch] = ListBuffer()
     val serializableObjectHolder: ListBuffer[SerializableObject] = ListBuffer()
     val relationHolder: ListBuffer[ColumnarHashedRelation] = ListBuffer()
     var idx = 0
-    var curRDD = inputRDDs()(0)
+    val inputRDDs = columnarInputRDDs
+    var curRDD = if (inputRDDs.nonEmpty) {
+      inputRDDs.head
+    } else {
+      // FIXME
+      throw new UnsupportedOperationException(s"curRDD should not be empty")
+    }
 //    while (idx < buildPlans.length) {
 //
 //      val curPlan = buildPlans(idx)._1
@@ -473,32 +478,7 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
       build_elapse += System.nanoTime() - beforeBuild
       val resultStructType = ArrowUtils.fromArrowSchema(resCtx.outputSchema)
       val resIter = streamedSortPlan match {
-        case p: SortExecTransformer =>
-          new Iterator[ColumnarBatch] {
-            override def hasNext: Boolean = {
-              val res = nativeIterator.hasNext
-              if (res == false) updateMetrics(nativeIterator)
-              res
-            }
-
-            override def next(): ColumnarBatch = {
-              val beforeEval = System.nanoTime()
-              val output_rb = nativeIterator.next
-              if (output_rb == null) {
-                eval_elapse += System.nanoTime() - beforeEval
-                val resultColumnVectors =
-                  ArrowWritableColumnVector.allocateColumns(0, resultStructType).toArray
-                return new ColumnarBatch(resultColumnVectors.map(_.asInstanceOf[ColumnVector]), 0)
-              }
-              val outputNumRows = output_rb.getLength
-              val output = ConverterUtils.fromArrowRecordBatch(resCtx.outputSchema, output_rb)
-              ConverterUtils.releaseArrowRecordBatch(output_rb)
-              eval_elapse += System.nanoTime() - beforeEval
-              new ColumnarBatch(output.map(v => v.asInstanceOf[ColumnVector]), outputNumRows)
-            }
-          }
-
-        case _ if contains_aggregate =>
+        case t: TransformSupport =>
           new Iterator[ColumnarBatch] {
             override def hasNext: Boolean = {
               val res = nativeIterator.hasNext
@@ -522,68 +502,8 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
               new ColumnarBatch(output.map(v => v.asInstanceOf[ColumnVector]), outputNumRows)
             }
           }
-
-        case c: ConditionProjectExecTransformer =>
-          new Iterator[ColumnarBatch] {
-            override def hasNext: Boolean = {
-              val res = nativeIterator.hasNext
-              // if (res == false) updateMetrics(nativeIterator)
-              res
-            }
-
-            override def next(): ColumnarBatch = {
-              val beforeEval = System.nanoTime()
-              val output_rb = nativeIterator.next
-              if (output_rb == null) {
-                eval_elapse += System.nanoTime() - beforeEval
-                val resultColumnVectors =
-                  ArrowWritableColumnVector.allocateColumns(0, resultStructType).toArray
-                return new ColumnarBatch(resultColumnVectors.map(_.asInstanceOf[ColumnVector]), 0)
-              }
-              val outputNumRows = output_rb.getLength
-              val output = ConverterUtils.fromArrowRecordBatch(resCtx.outputSchema, output_rb)
-              ConverterUtils.releaseArrowRecordBatch(output_rb)
-              eval_elapse += System.nanoTime() - beforeEval
-              new ColumnarBatch(output.map(v => v.asInstanceOf[ColumnVector]), outputNumRows)
-            }
-          }
-
         case _ =>
-          // now we can return this wholestagecodegen iter
-          new Iterator[ColumnarBatch] {
-            override def hasNext: Boolean = {
-              val res = iter.hasNext
-              if (res == false) updateMetrics(nativeIterator)
-              res
-            }
-
-            override def next(): ColumnarBatch = {
-              val cb = iter.next()
-              if (cb.numRows == 0) {
-                val resultColumnVectors =
-                  ArrowWritableColumnVector.allocateColumns(0, resultStructType).toArray
-                return new ColumnarBatch(resultColumnVectors.map(_.asInstanceOf[ColumnVector]), 0)
-              }
-              val beforeEval = System.nanoTime()
-              val input_rb =
-                ConverterUtils.createArrowRecordBatch(cb)
-
-              val output_rb = nativeIterator.process(resCtx.inputSchema, input_rb)
-              if (output_rb == null) {
-                ConverterUtils.releaseArrowRecordBatch(input_rb)
-                eval_elapse += System.nanoTime() - beforeEval
-                val resultColumnVectors =
-                  ArrowWritableColumnVector.allocateColumns(0, resultStructType).toArray
-                return new ColumnarBatch(resultColumnVectors.map(_.asInstanceOf[ColumnVector]), 0)
-              }
-              val outputNumRows = output_rb.getLength
-              ConverterUtils.releaseArrowRecordBatch(input_rb)
-              val output = ConverterUtils.fromArrowRecordBatch(resCtx.outputSchema, output_rb)
-              ConverterUtils.releaseArrowRecordBatch(output_rb)
-              eval_elapse += System.nanoTime() - beforeEval
-              new ColumnarBatch(output.map(v => v.asInstanceOf[ColumnVector]), outputNumRows)
-            }
-          }
+          throw new UnsupportedOperationException(s"streamedSortPlan should support transformation")
       }
 
       var closed = false

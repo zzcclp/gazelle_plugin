@@ -114,7 +114,7 @@ case class ArrowEvalPythonExecTransformer(udfs: Seq[PythonUDF], resultAttrs: Seq
   protected def withNewChildInternal(newChild: SparkPlan): SparkPlan =
     copy(child = newChild)
 
-  override def inputRDDs: Seq[RDD[ColumnarBatch]] = {
+  override def columnarInputRDDs: Seq[RDD[ColumnarBatch]] = {
     throw new UnsupportedOperationException(s"This operator doesn't support inputRDDs.")
   }
 

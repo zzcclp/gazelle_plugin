@@ -17,8 +17,11 @@
 
 package com.intel.oap.substrait.type;
 
+import java.util.ArrayList;
+
 public class TypeBuiler {
-    private TypeBuiler() {}
+    private TypeBuiler() {
+    }
 
     public static TypeNode makeFP64(String name, Boolean nullable) {
         return new FP64TypeNode(name, nullable);
@@ -26,5 +29,9 @@ public class TypeBuiler {
 
     public static TypeNode makeBoolean(String name, Boolean nullable) {
         return new BooleanTypeNode(name, nullable);
+    }
+
+    public static TypeNode makeStruct(ArrayList<TypeNode> types) {
+        return new StructNode(types);
     }
 }

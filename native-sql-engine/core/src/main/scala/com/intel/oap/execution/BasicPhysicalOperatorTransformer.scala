@@ -98,9 +98,9 @@ case class ConditionProjectExecTransformer(
       res
     }
 
-  override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
+  override def columnarInputRDDs: Seq[RDD[ColumnarBatch]] = child match {
     case c: TransformSupport =>
-      c.inputRDDs
+      c.columnarInputRDDs
     case _ =>
       Seq(child.executeColumnar())
   }
@@ -229,7 +229,7 @@ case class UnionExecTransformer(children: Seq[SparkPlan]) extends SparkPlan with
     throw new UnsupportedOperationException(s"This operator doesn't support doExecute().")
   }
 
-  override def inputRDDs: Seq[RDD[ColumnarBatch]] = {
+  override def columnarInputRDDs: Seq[RDD[ColumnarBatch]] = {
     throw new UnsupportedOperationException(s"This operator doesn't support inputRDDs.")
   }
 

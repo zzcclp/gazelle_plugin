@@ -133,7 +133,7 @@ case class WindowExecTransformer(windowExpression: Seq[NamedExpression],
     throw new UnsupportedOperationException()
   }
 
-  override def inputRDDs: Seq[RDD[ColumnarBatch]] = {
+  override def columnarInputRDDs: Seq[RDD[ColumnarBatch]] = {
     throw new UnsupportedOperationException(s"This operator doesn't support inputRDDs.")
   }
 

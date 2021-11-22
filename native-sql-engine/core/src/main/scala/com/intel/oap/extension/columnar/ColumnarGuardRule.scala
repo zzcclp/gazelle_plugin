@@ -73,7 +73,7 @@ case class TransformGuardRule() extends Rule[SparkPlan] {
           transformer
         case plan: BatchScanExec =>
           if (!enableColumnarBatchScan) return false
-          new ColumnarBatchScanExec(plan.output, plan.scan)
+          new BatchScanExecTransformer(plan.output, plan.scan)
         case plan: FileSourceScanExec =>
           if (plan.supportsColumnar) {
             return false

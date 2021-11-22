@@ -120,9 +120,9 @@ case class HashAggregateExecTransformer(
     throw new UnsupportedOperationException(s"This operator doesn't support doExecuteColumnar().")
   }
 
-  override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
+  override def columnarInputRDDs: Seq[RDD[ColumnarBatch]] = child match {
     case c: TransformSupport =>
-      c.inputRDDs
+      c.columnarInputRDDs
     case _ =>
       Seq(child.executeColumnar())
   }

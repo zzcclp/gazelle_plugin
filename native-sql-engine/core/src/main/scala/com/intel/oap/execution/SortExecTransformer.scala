@@ -87,9 +87,9 @@ case class SortExecTransformer(
 
   override def getChild: SparkPlan = child
 
-  override def inputRDDs(): Seq[RDD[ColumnarBatch]] = child match {
+  override def columnarInputRDDs: Seq[RDD[ColumnarBatch]] = child match {
     case c: TransformSupport =>
-      c.inputRDDs
+      c.columnarInputRDDs
     case _ =>
       Seq(child.executeColumnar())
   }

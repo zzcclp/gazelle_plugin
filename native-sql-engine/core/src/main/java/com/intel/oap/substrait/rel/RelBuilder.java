@@ -46,4 +46,9 @@ public class RelBuilder {
                                          ArrayList<AggregateFunctionNode> aggregateFunctionNodes) {
     return new AggregateRelNode(input, groupings, aggregateFunctionNodes);
   }
+
+  public static RelNode makeReadRel(ArrayList<TypeNode> types, ArrayList<String> names,
+                                    ArrayList<String> paths) {
+    return new ReadRelNode(types, names, paths);
+  }
 }
