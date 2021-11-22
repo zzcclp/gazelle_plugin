@@ -127,9 +127,29 @@ void SubstraitParser::ParseType(const substrait::Type& stype) {
       auto name = sfp64.variation().name();
       break;
     }
+    case substrait::Type::KindCase::kStruct: {
+      auto sstruct = stype.struct_();
+      auto& stypes = sstruct.types();
+      for (auto& type : stypes) {
+        ParseType(type);
+      }
+    }
     default:
       std::cout << "type not supported" << std::endl;
       break;
+  }
+}
+
+void SubstraitParser::ParseNamedStruct(const substrait::Type::NamedStruct& named_struct) {
+  auto& snames = named_struct.names();
+  for (auto& sname : snames) {
+    std::cout << "name: " << sname << std::endl;
+  }
+  // Parse Struct
+  auto& sstruct = named_struct.struct_();
+  auto& stypes = sstruct.types();
+  for (auto& type : stypes) {
+    ParseType(type);
   }
 }
 
@@ -183,6 +203,22 @@ void SubstraitParser::ParseFilterRel(const substrait::FilterRel& sfilter) {
   }
 }
 
+void SubstraitParser::ParseReadRel(const substrait::ReadRel& sread) {
+  if (sread.has_base_schema()) {
+    auto& base_schema = sread.base_schema();
+    ParseNamedStruct(base_schema);
+  }
+  // Parse local files
+  if (sread.has_local_files()) {
+    auto& local_files = sread.local_files();
+    auto& files_list = local_files.items();
+    for (auto& file : files_list) {
+      auto& uri_path = file.uri_path();
+      std::cout << "uri_path: " << uri_path << std::endl;
+    }
+  }
+}
+
 void SubstraitParser::ParseRel(const substrait::Rel& srel) {
   if (srel.has_aggregate()) {
     ParseAggregateRel(srel.aggregate());
@@ -190,6 +226,8 @@ void SubstraitParser::ParseRel(const substrait::Rel& srel) {
     ParseProjectRel(srel.project());
   } else if (srel.has_filter()) {
     ParseFilterRel(srel.filter());
+  } else if (srel.has_read()) {
+    ParseReadRel(srel.read());
   } else {
     std::cout << "not supported" << std::endl;
   }
@@ -204,7 +242,7 @@ void SubstraitParser::ParsePlan(const substrait::Plan& splan) {
     auto id = sfmap.function_id().id();
     auto name = sfmap.name();
     functions_map_[id] = name;
-    std::cout << "id: " << id << "name: " << name << std::endl;
+    std::cout << "Function id: " << id << ", name: " << name << std::endl;
   }
   for (auto& srel : splan.relations()) {
     ParseRel(srel);

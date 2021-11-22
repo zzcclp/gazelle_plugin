@@ -35,9 +35,11 @@ class SubstraitParser {
   void ParseFieldReference(const io::substrait::FieldReference& sfield);
   void ParseExpression(const io::substrait::Expression& sexpr);
   void ParseType(const io::substrait::Type& stype);
+  void ParseNamedStruct(const io::substrait::Type::NamedStruct& named_struct);
   void ParseAggregateRel(const io::substrait::AggregateRel& sagg);
   void ParseProjectRel(const io::substrait::ProjectRel& sproject);
   void ParseFilterRel(const io::substrait::FilterRel& sfilter);
+  void ParseReadRel(const io::substrait::ReadRel& sread);
   void ParseRel(const io::substrait::Rel& srel);
   void ParsePlan(const io::substrait::Plan& splan);
   std::shared_ptr<ResultIterator<arrow::RecordBatch>> getResIter();

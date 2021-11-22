@@ -134,6 +134,8 @@ message AggregateRel {
     message Measure {
         Expression.AggregateFunction measure = 1;
     }
+    repeated Type input_types = 6;
+    repeated Type output_types = 7;
 }
 
 message SortRel {
