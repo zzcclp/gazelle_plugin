@@ -17,8 +17,9 @@
 
 package com.intel.oap.execution
 
+import com.google.common.collect.Lists
 import com.intel.oap.GazellePluginConfig
-import com.intel.oap.expression.ConverterUtils
+import com.intel.oap.expression.{ConverterUtils, ExpressionConverter, ExpressionTransformer}
 import com.intel.oap.substrait.rel.RelBuilder
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.expressions._
@@ -27,10 +28,14 @@ import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import com.intel.oap.spark.sql.execution.datasources.v2.arrow.ArrowScan
+import com.intel.oap.substrait.expression.ExpressionNode
 
 class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan: Scan)
     extends BatchScanExec(output, scan) with TransformSupport {
   val tmpDir: String = GazellePluginConfig.getConf.tmpFile
+  val filePath: String = scan.asInstanceOf[ArrowScan].options.get("path")
+  val filterExprs: Seq[Expression] = scan.asInstanceOf[ArrowScan].dataFilters
   override def supportsColumnar(): Boolean = true
   override lazy val metrics = Map(
     "numOutputRows" -> SQLMetrics.createMetric(sparkContext, "number of output rows"),
@@ -89,7 +94,16 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
       nameList.add(attr.name)
     }
     val pathList = new java.util.ArrayList[String]()
-    val relNode = RelBuilder.makeReadRel(typeNodes, nameList, pathList)
+    pathList.add(filePath)
+    val filterNodes = filterExprs.toList.map(expr => {
+      val transformer = ExpressionConverter.replaceWithExpressionTransformer(expr, output)
+      transformer.asInstanceOf[ExpressionTransformer].doTransform(args)
+    })
+    val filterList = new java.util.ArrayList[ExpressionNode]()
+    for (filterNode <- filterNodes) {
+      filterList.add(filterNode)
+    }
+    val relNode = RelBuilder.makeReadRel(typeNodes, nameList, pathList, filterList)
     val outputSchema = ConverterUtils.toArrowSchema(output)
     // FIXME
     val inputSchema = ConverterUtils.toArrowSchema(output)

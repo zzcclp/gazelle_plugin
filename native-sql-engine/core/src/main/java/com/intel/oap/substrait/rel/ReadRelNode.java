@@ -1,5 +1,6 @@
 package com.intel.oap.substrait.rel;
 
+import com.intel.oap.substrait.expression.ExpressionNode;
 import com.intel.oap.substrait.type.TypeNode;
 import io.substrait.ReadRel;
 import io.substrait.Rel;
@@ -11,12 +12,14 @@ public class ReadRelNode implements RelNode {
     private final ArrayList<TypeNode> types = new ArrayList<>();
     private final ArrayList<String> names = new ArrayList<>();
     private final ArrayList<String> paths = new ArrayList<>();
+    private final ArrayList<ExpressionNode> filters = new ArrayList<>();
 
     ReadRelNode(ArrayList<TypeNode> types, ArrayList<String> names,
-                ArrayList<String> paths) {
+                ArrayList<String> paths, ArrayList<ExpressionNode> filters) {
         this.types.addAll(types);
         this.names.addAll(names);
         this.paths.addAll(paths);
+        this.filters.addAll(filters);
     }
 
     @Override
@@ -41,6 +44,9 @@ public class ReadRelNode implements RelNode {
         ReadRel.Builder readBuilder = ReadRel.newBuilder();
         readBuilder.setBaseSchema(nStructBuilder.build());
         readBuilder.setLocalFiles(localFilesBuilder.build());
+        for (ExpressionNode expressionNode : filters) {
+            readBuilder.addFilter(expressionNode.toProtobuf());
+        }
         Rel.Builder builder = Rel.newBuilder();
         builder.setRead(readBuilder.build());
         return builder.build();

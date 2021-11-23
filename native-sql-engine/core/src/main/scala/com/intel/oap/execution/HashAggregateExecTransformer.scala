@@ -237,7 +237,7 @@ case class HashAggregateExecTransformer(
     val inputTypeNodes = ConverterUtils.getTypeNodeFromAttributes(originalInputAttributes)
     val outputTypeNodes = ConverterUtils.getTypeNodeFromAttributes(resAttributes)
     // Set ResultExpressions
-    // FIXME: allAggregateResultAttributes needs to transform?
+    // FIXME: allAggregateResultAttributes needs to be transformed?
     val allAggregateResultAttributes: List[Attribute] =
       groupingAttributes.toList ::: getAttrForAggregateExpr(
         aggregateExpressions, aggregateAttributes)

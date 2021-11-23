@@ -232,6 +232,11 @@ void SubstraitParser::ParseReadRel(const substrait::ReadRel& sread) {
       std::cout << "uri_path: " << uri_path << std::endl;
     }
   }
+  auto& filters = sread.filter();
+  std::cout << "filter pushdown: " << std::endl;
+  for (auto& sfilter : filters) {
+    ParseExpression(sfilter);
+  }
 }
 
 void SubstraitParser::ParseRel(const substrait::Rel& srel) {

@@ -146,6 +146,12 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
+      <artifactId>spark-arrow-datasource-standard</artifactId>
+      <groupId>com.intel.oap</groupId>
+      <version>${project.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
       <groupId>org.scalacheck</groupId>
       <artifactId>scalacheck_${scala.binary.version}</artifactId>
       <version>1.13.5</version>
@@ -262,12 +268,6 @@
       <artifactId>hadoop-client</artifactId>
       <version>${hadoop.version}</version>
       <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.intel.oap</groupId>
-      <artifactId>spark-arrow-datasource-standard</artifactId>
-      <version>${project.version}</version>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.mariadb.jdbc</groupId>
