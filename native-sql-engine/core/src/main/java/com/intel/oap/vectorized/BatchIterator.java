@@ -23,6 +23,8 @@ import org.apache.arrow.dataset.jni.UnsafeRecordBatchSerializer;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.ipc.message.ArrowRecordBatch;
 import org.apache.arrow.vector.types.pojo.Schema;
+
+import java.io.Serializable;
 import java.util.List;
 import org.apache.arrow.memory.ArrowBuf;
 import java.io.ByteArrayOutputStream;
@@ -33,7 +35,7 @@ import org.apache.arrow.vector.ipc.message.ArrowBuffer;
 import org.apache.arrow.vector.ipc.message.MessageSerializer;
 import org.apache.spark.sql.execution.datasources.v2.arrow.SparkMemoryUtils;
 
-public class BatchIterator implements AutoCloseable {
+public class BatchIterator implements AutoCloseable, Serializable {
   private native boolean nativeHasNext(long nativeHandler);
   private native byte[] nativeNext(long nativeHandler);
   private native MetricsObject nativeFetchMetrics(long nativeHandler);

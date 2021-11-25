@@ -160,17 +160,16 @@ case class HashAggregateExecTransformer(
       case _ =>
         null
     }
-    val (relNode, inputSchema) = if (childCtx != null) {
+    val (relNode, inputAttributes) = if (childCtx != null) {
       (
         getAggRel(args, childCtx.root),
-        childCtx.inputSchema)
+        childCtx.inputAttributes)
     } else {
       (
         getAggRel(args),
-        ConverterUtils.toArrowSchema(child.output))
+        child.output)
     }
-    val outputSchema = ConverterUtils.toArrowSchema(output)
-    TransformContext(inputSchema, outputSchema, relNode)
+    TransformContext(inputAttributes, output, relNode)
   }
 
   override def verboseString(maxFields: Int): String = toString(verbose = true, maxFields)

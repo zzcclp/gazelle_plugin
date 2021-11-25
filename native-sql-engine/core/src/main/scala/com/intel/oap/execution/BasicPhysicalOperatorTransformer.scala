@@ -145,13 +145,12 @@ case class ConditionProjectExecTransformer(
     if (kernelFunction == null) {
       return childCtx
     }
-    val inputSchema = if (childCtx != null) {
-      childCtx.inputSchema
+    val inputAttributes = if (childCtx != null) {
+      childCtx.inputAttributes
     } else {
-      ConverterUtils.toArrowSchema(child.output)
+      child.output
     }
-    val outputSchema = ConverterUtils.toArrowSchema(output)
-    TransformContext(inputSchema, outputSchema, kernelFunction)
+    TransformContext(inputAttributes, output, kernelFunction)
   }
 
   protected override def doExecute()
