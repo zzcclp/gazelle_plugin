@@ -43,9 +43,11 @@ import org.apache.spark.util.{ExecutorManager, UserAddedJarUtils}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
-case class TransformContext(inputSchema: Schema, outputSchema: Schema, root: RelNode) {}
+case class TransformContext(inputAttributes: Seq[Attribute],
+                            outputAttributes: Seq[Attribute], root: RelNode) {}
 
-case class WholestageTransformContext(inputSchema: Schema, outputSchema: Schema, root: PlanNode) {}
+case class WholestageTransformContext(inputAttributes: Seq[Attribute],
+                                      outputAttributes: Seq[Attribute], root: PlanNode) {}
 
 trait TransformSupport extends SparkPlan {
   /**
@@ -151,7 +153,8 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
     }
     val relNodes = Lists.newArrayList(childCtx.root)
     val planNode = PlanBuilder.makePlan(mappingNodes, relNodes)
-    WholestageTransformContext(childCtx.inputSchema, childCtx.outputSchema, planNode)
+    WholestageTransformContext(childCtx.inputAttributes,
+      childCtx.outputAttributes, planNode)
   }
 
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = {
@@ -286,13 +289,6 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
     val serializableObjectHolder: ListBuffer[SerializableObject] = ListBuffer()
     val relationHolder: ListBuffer[ColumnarHashedRelation] = ListBuffer()
     var idx = 0
-    val inputRDDs = columnarInputRDDs
-    var curRDD = if (inputRDDs.nonEmpty) {
-      inputRDDs.head
-    } else {
-      // FIXME
-      throw new UnsupportedOperationException(s"curRDD should not be empty")
-    }
 //    while (idx < buildPlans.length) {
 //
 //      val curPlan = buildPlans(idx)._1
@@ -445,9 +441,19 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
 //      idx += 1
 //    }
 
-    curRDD.mapPartitions { iter =>
-      ExecutorManager.tryTaskSet(numaBindingInfo)
-      GazellePluginConfig.getConf
+    // check if BatchScan exists
+    var current_op = child
+    while (!current_op.isInstanceOf[BatchScanExecTransformer] &&
+           current_op.asInstanceOf[TransformSupport].getChild != null) {
+      current_op = current_op.asInstanceOf[TransformSupport].getChild
+    }
+    val contains_batchscan = if (current_op != null &&
+      current_op.isInstanceOf[BatchScanExecTransformer]) {
+      true
+    } else {
+      false
+    }
+    if (contains_batchscan) {
       val execTempDir = GazellePluginConfig.getTempFile
       val jarList = listJars.map(jarUrl => {
         logWarning(s"Get Codegened library Jar ${jarUrl}")
@@ -458,69 +464,117 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
           sparkConf)
         s"${execTempDir}/spark-columnar-plugin-codegen-precompile-${signature}.jar"
       })
-
       // Start Transform
       val resCtx = doWholestageTransform()
-      val lazyReadFunction = prepareLazyReadFunction()
-      val lazyReadExpr =
-        TreeBuilder.makeExpression(
-          lazyReadFunction,
-          Field.nullable("result", new ArrowType.Int(32, true)))
       val transKernel = new ExpressionEvaluator(jarList.toList.asJava)
-
-      val inBatchIter = new ColumnarNativeIterator(iter.asJava)
+      val inBatchIter: ColumnarNativeIterator = null
       // we need to complete dependency RDD's firstly
       val beforeBuild = System.nanoTime()
+      val inputSchema = ConverterUtils.toArrowSchema(resCtx.inputAttributes)
+      val outputSchema = ConverterUtils.toArrowSchema(resCtx.outputAttributes)
       val nativeIterator = transKernel.createKernelWithIterator(
-        resCtx.inputSchema, resCtx.root, resCtx.outputSchema,
-        Lists.newArrayList(lazyReadExpr), inBatchIter,
+        inputSchema, resCtx.root, outputSchema,
+        Lists.newArrayList(), inBatchIter,
         dependentKernelIterators.toArray, true)
-      build_elapse += System.nanoTime() - beforeBuild
-      val resultStructType = ArrowUtils.fromArrowSchema(resCtx.outputSchema)
-      val resIter = streamedSortPlan match {
-        case t: TransformSupport =>
-          new Iterator[ColumnarBatch] {
-            override def hasNext: Boolean = {
-              val res = nativeIterator.hasNext
-              // if (res == false) updateMetrics(nativeIterator)
-              res
-            }
+//      val scanTime = longMetric("scanTime")
+//      val numInputBatches = longMetric("numInputBatches")
+//      val inputSize = longMetric("inputSize")
+      val batchScan = current_op.asInstanceOf[BatchScanExecTransformer]
+      val wsRDD = new WholestageColumnarRDD(
+        sparkContext, batchScan.partitions, batchScan.readerFactory,
+        true, nativeIterator, current_op.output,
+        execTempDir)
+      wsRDD.map{ r =>
+        numOutputBatches += 1
+        r
+      }
+    } else {
+      val inputRDDs = columnarInputRDDs
+      var curRDD = inputRDDs.head
+      val resCtx = doWholestageTransform()
+      val inputAttributes = resCtx.inputAttributes
+      val outputAttributes = resCtx.outputAttributes
+      val rootNode = resCtx.root
 
-            override def next(): ColumnarBatch = {
-              val beforeEval = System.nanoTime()
-              val output_rb = nativeIterator.next
-              if (output_rb == null) {
-                eval_elapse += System.nanoTime() - beforeEval
-                val resultColumnVectors =
-                  ArrowWritableColumnVector.allocateColumns(0, resultStructType).toArray
-                return new ColumnarBatch(resultColumnVectors.map(_.asInstanceOf[ColumnVector]), 0)
+      curRDD.mapPartitions { iter =>
+        ExecutorManager.tryTaskSet(numaBindingInfo)
+        GazellePluginConfig.getConf
+        val execTempDir = GazellePluginConfig.getTempFile
+        val jarList = listJars.map(jarUrl => {
+          logWarning(s"Get Codegened library Jar ${jarUrl}")
+          UserAddedJarUtils.fetchJarFromSpark(
+            jarUrl,
+            execTempDir,
+            s"spark-columnar-plugin-codegen-precompile-${signature}.jar",
+            sparkConf)
+          s"${execTempDir}/spark-columnar-plugin-codegen-precompile-${signature}.jar"
+        })
+
+        // Start Transform
+        val lazyReadFunction = prepareLazyReadFunction()
+        val lazyReadExpr =
+          TreeBuilder.makeExpression(
+            lazyReadFunction,
+            Field.nullable("result", new ArrowType.Int(32, true)))
+        val transKernel = new ExpressionEvaluator(jarList.toList.asJava)
+
+        val inBatchIter = new ColumnarNativeIterator(iter.asJava)
+        // we need to complete dependency RDD's firstly
+        val beforeBuild = System.nanoTime()
+        val inputSchema = ConverterUtils.toArrowSchema(inputAttributes)
+        val outputSchema = ConverterUtils.toArrowSchema(outputAttributes)
+        val nativeIterator = transKernel.createKernelWithIterator(
+          inputSchema, rootNode, outputSchema,
+          Lists.newArrayList(lazyReadExpr), inBatchIter,
+          dependentKernelIterators.toArray, true)
+        build_elapse += System.nanoTime() - beforeBuild
+        val resultStructType = ArrowUtils.fromArrowSchema(outputSchema)
+        val resIter = streamedSortPlan match {
+          case t: TransformSupport =>
+            new Iterator[ColumnarBatch] {
+              override def hasNext: Boolean = {
+                val res = nativeIterator.hasNext
+                // if (res == false) updateMetrics(nativeIterator)
+                res
               }
-              val outputNumRows = output_rb.getLength
-              val output = ConverterUtils.fromArrowRecordBatch(resCtx.outputSchema, output_rb)
-              ConverterUtils.releaseArrowRecordBatch(output_rb)
-              eval_elapse += System.nanoTime() - beforeEval
-              new ColumnarBatch(output.map(v => v.asInstanceOf[ColumnVector]), outputNumRows)
-            }
-          }
-        case _ =>
-          throw new UnsupportedOperationException(s"streamedSortPlan should support transformation")
-      }
 
-      var closed = false
-      def close = {
-        closed = true
-        pipelineTime += (eval_elapse + build_elapse) / 1000000
-        buildRelationBatchHolder.foreach(_.close) // fixing: ref cnt goes nagative
-        dependentKernels.foreach(_.close)
-        dependentKernelIterators.foreach(_.close)
-        // nativeKernel.close
-        nativeIterator.close
-        relationHolder.clear()
+              override def next(): ColumnarBatch = {
+                val beforeEval = System.nanoTime()
+                val output_rb = nativeIterator.next
+                if (output_rb == null) {
+                  eval_elapse += System.nanoTime() - beforeEval
+                  val resultColumnVectors =
+                    ArrowWritableColumnVector.allocateColumns(0, resultStructType).toArray
+                  return new ColumnarBatch(resultColumnVectors.map(_.asInstanceOf[ColumnVector]), 0)
+                }
+                val outputNumRows = output_rb.getLength
+                val outSchema = ConverterUtils.toArrowSchema(resCtx.outputAttributes)
+                val output = ConverterUtils.fromArrowRecordBatch(outSchema, output_rb)
+                ConverterUtils.releaseArrowRecordBatch(output_rb)
+                eval_elapse += System.nanoTime() - beforeEval
+                new ColumnarBatch(output.map(v => v.asInstanceOf[ColumnVector]), outputNumRows)
+              }
+            }
+          case _ =>
+            throw new UnsupportedOperationException(
+              s"streamedSortPlan should support transformation")
+        }
+        var closed = false
+        def close = {
+          closed = true
+          pipelineTime += (eval_elapse + build_elapse) / 1000000
+          buildRelationBatchHolder.foreach(_.close) // fixing: ref cnt goes nagative
+          dependentKernels.foreach(_.close)
+          dependentKernelIterators.foreach(_.close)
+          // nativeKernel.close
+          nativeIterator.close
+          relationHolder.clear()
+        }
+        SparkMemoryUtils.addLeakSafeTaskCompletionListener[Unit](_ => {
+          close
+        })
+        new CloseableColumnBatchIterator(resIter)
       }
-      SparkMemoryUtils.addLeakSafeTaskCompletionListener[Unit](_ => {
-        close
-      })
-      new CloseableColumnBatchIterator(resIter)
     }
   }
 }

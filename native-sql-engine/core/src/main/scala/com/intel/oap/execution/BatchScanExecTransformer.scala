@@ -68,9 +68,7 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
   }
 
   override def columnarInputRDDs: Seq[RDD[ColumnarBatch]] = {
-    var RDDs = Seq[RDD[ColumnarBatch]]()
-    RDDs = RDDs :+ doExecuteColumnar()
-    RDDs
+    null
   }
 
   override def getBuildPlans: Seq[(SparkPlan, SparkPlan)] = {
@@ -104,9 +102,6 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
       filterList.add(filterNode)
     }
     val relNode = RelBuilder.makeReadRel(typeNodes, nameList, pathList, filterList)
-    val outputSchema = ConverterUtils.toArrowSchema(output)
-    // FIXME
-    val inputSchema = ConverterUtils.toArrowSchema(output)
-    TransformContext(inputSchema, outputSchema, relNode)
+    TransformContext(output, output, relNode)
   }
 }
