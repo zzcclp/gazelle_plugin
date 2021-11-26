@@ -70,6 +70,7 @@ message ReadRel {
     message LocalFiles {
 
         repeated FileOrFiles items = 1;
+        uint32 index = 2;
 
         message FileOrFiles {
             oneof path_type {
@@ -83,6 +84,10 @@ message ReadRel {
                 UNKNOWN = 0;
                 PARQUET = 1;
             }
+
+            uint64 start = 4;
+            uint64 length = 5;
+
         }
 
     }

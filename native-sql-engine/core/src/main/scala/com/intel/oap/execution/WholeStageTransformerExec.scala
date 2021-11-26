@@ -70,6 +70,13 @@ trait TransformSupport extends SparkPlan {
 
   def doTransform(args: java.lang.Object): TransformContext
 
+  // This is used by cases containing batch scan.
+  def doTransform(args: java.lang.Object,
+                  index: java.lang.Integer,
+                  paths: java.util.ArrayList[String],
+                  starts: java.util.ArrayList[java.lang.Long],
+                  lengths: java.util.ArrayList[java.lang.Long]): TransformContext
+
   def dependentPlanCtx: TransformContext = null
 
   def updateMetrics(out_num_rows: Long, process_time: Long): Unit = {}
@@ -136,7 +143,17 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
       Seq()
     }
 
-  override def doTransform(args: java.lang.Object): TransformContext = null
+  override def doTransform(args: java.lang.Object): TransformContext = {
+    throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")
+  }
+
+  override def doTransform(args: java.lang.Object,
+                           index: java.lang.Integer,
+                           paths: java.util.ArrayList[String],
+                           starts: java.util.ArrayList[java.lang.Long],
+                           lengths: java.util.ArrayList[java.lang.Long]): TransformContext = {
+    throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")
+  }
 
   def doWholestageTransform(): WholestageTransformContext = {
     val functionMap = new java.util.HashMap[String, Long]()
@@ -465,24 +482,10 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
         s"${execTempDir}/spark-columnar-plugin-codegen-precompile-${signature}.jar"
       })
       // Start Transform
-      val resCtx = doWholestageTransform()
-      val transKernel = new ExpressionEvaluator(jarList.toList.asJava)
-      val inBatchIter: ColumnarNativeIterator = null
-      // we need to complete dependency RDD's firstly
-      val beforeBuild = System.nanoTime()
-      val inputSchema = ConverterUtils.toArrowSchema(resCtx.inputAttributes)
-      val outputSchema = ConverterUtils.toArrowSchema(resCtx.outputAttributes)
-      val nativeIterator = transKernel.createKernelWithIterator(
-        inputSchema, resCtx.root, outputSchema,
-        Lists.newArrayList(), inBatchIter,
-        dependentKernelIterators.toArray, true)
-//      val scanTime = longMetric("scanTime")
-//      val numInputBatches = longMetric("numInputBatches")
-//      val inputSize = longMetric("inputSize")
       val batchScan = current_op.asInstanceOf[BatchScanExecTransformer]
       val wsRDD = new WholestageColumnarRDD(
         sparkContext, batchScan.partitions, batchScan.readerFactory,
-        true, nativeIterator, current_op.output,
+        true, child, jarList, dependentKernelIterators,
         execTempDir)
       wsRDD.map{ r =>
         numOutputBatches += 1

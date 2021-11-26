@@ -276,6 +276,14 @@ case class SortMergeJoinExecTransformer(
     throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")
   }
 
+  override def doTransform(args: java.lang.Object,
+                           index: java.lang.Integer,
+                           paths: java.util.ArrayList[String],
+                           starts: java.util.ArrayList[java.lang.Long],
+                           lengths: java.util.ArrayList[java.lang.Long]): TransformContext = {
+    throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")
+  }
+
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
     throw new UnsupportedOperationException(s"This operator doesn't support doExecuteColumnar().")
   }

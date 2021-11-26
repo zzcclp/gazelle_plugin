@@ -95,6 +95,14 @@ case class WindowExecTransformer(windowExpression: Seq[NamedExpression],
     throw new UnsupportedOperationException(s"This operator doesn't support doExecuteColumnar().")
   }
 
+  override def doTransform(args: java.lang.Object,
+                           index: java.lang.Integer,
+                           paths: java.util.ArrayList[String],
+                           starts: java.util.ArrayList[java.lang.Long],
+                           lengths: java.util.ArrayList[java.lang.Long]): TransformContext = {
+    throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")
+  }
+
   override def canEqual(other: Any): Boolean = other.isInstanceOf[WindowExecTransformer]
 
   override def equals(other: Any): Boolean = other match {

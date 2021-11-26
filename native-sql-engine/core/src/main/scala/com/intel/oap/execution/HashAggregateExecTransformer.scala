@@ -172,6 +172,29 @@ case class HashAggregateExecTransformer(
     TransformContext(inputAttributes, output, relNode)
   }
 
+  override def doTransform(args: java.lang.Object,
+                           index: java.lang.Integer,
+                           paths: java.util.ArrayList[String],
+                           starts: java.util.ArrayList[java.lang.Long],
+                           lengths: java.util.ArrayList[java.lang.Long]): TransformContext = {
+    val childCtx = child match {
+      case c: TransformSupport =>
+        c.doTransform(args, index, paths, starts, lengths)
+      case _ =>
+        null
+    }
+    val (relNode, inputAttributes) = if (childCtx != null) {
+      (
+        getAggRel(args, childCtx.root),
+        childCtx.inputAttributes)
+    } else {
+      (
+        getAggRel(args),
+        child.output)
+    }
+    TransformContext(inputAttributes, output, relNode)
+  }
+
   override def verboseString(maxFields: Int): String = toString(verbose = true, maxFields)
 
   override def simpleString(maxFields: Int): String = toString(verbose = false, maxFields)
