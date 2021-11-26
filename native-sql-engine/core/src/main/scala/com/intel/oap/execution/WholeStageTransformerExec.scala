@@ -17,7 +17,8 @@
 
 package com.intel.oap.execution
 
-import java.util.concurrent.TimeUnit.NANOSECONDS
+import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 
 import com.google.common.collect.Lists
 import com.intel.oap.GazellePluginConfig
@@ -25,10 +26,10 @@ import com.intel.oap.expression._
 import com.intel.oap.substrait.extensions.{MappingBuilder, MappingNode}
 import com.intel.oap.substrait.plan.{PlanBuilder, PlanNode}
 import com.intel.oap.substrait.rel.RelNode
-import com.intel.oap.vectorized.{BatchIterator, ExpressionEvaluator, _}
+import com.intel.oap.vectorized._
 import org.apache.arrow.gandiva.expression._
-import org.apache.arrow.vector.types.pojo.{ArrowType, Field, Schema}
-import org.apache.spark.SparkConf
+import org.apache.arrow.vector.types.pojo.{ArrowType, Field}
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Attribute, SortOrder}
@@ -37,11 +38,8 @@ import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.datasources.v2.arrow.SparkMemoryUtils
 import org.apache.spark.sql.execution.metric.SQLMetrics
 import org.apache.spark.sql.util.ArrowUtils
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.util.{ExecutorManager, UserAddedJarUtils}
-
-import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
 
 case class TransformContext(inputAttributes: Seq[Attribute],
                             outputAttributes: Seq[Attribute], root: RelNode) {}
@@ -306,163 +304,12 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
     val serializableObjectHolder: ListBuffer[SerializableObject] = ListBuffer()
     val relationHolder: ListBuffer[ColumnarHashedRelation] = ListBuffer()
     var idx = 0
-//    while (idx < buildPlans.length) {
-//
-//      val curPlan = buildPlans(idx)._1
-//      val parentPlan = buildPlans(idx)._2
-
-//      curRDD = curPlan match {
-//        case p: ColumnarBroadcastHashJoinExec =>
-//          val fetchTime = p.longMetric("fetchTime")
-//          val buildTime = p.longMetric("buildTime")
-//          val buildPlan = p.getBuildPlan
-//          val buildInputByteBuf = buildPlan.executeBroadcast[ColumnarHashedRelation]()
-//          curRDD.mapPartitions { iter =>
-//            GazellePluginConfig.getConf
-//            ExecutorManager.tryTaskSet(numaBindingInfo)
-//            // received broadcast value contain a hashmap and raw recordBatch
-//            val beforeFetch = System.nanoTime()
-//            val relation = buildInputByteBuf.value.asReadOnlyCopy()
-//            relationHolder += relation
-//            fetchTime += ((System.nanoTime() - beforeFetch) / 1000000)
-//            val beforeEval = System.nanoTime()
-//            val hashRelationObject = relation.hashRelationObj
-//            serializableObjectHolder += hashRelationObject
-//            val depIter =
-//              new CloseableColumnBatchIterator(relation.getColumnarBatchAsIter)
-//            val ctx = curPlan.asInstanceOf[TransformSupport].dependentPlanCtx
-//            val expression =
-//              TreeBuilder.makeExpression(
-//                ctx.root,
-//                Field.nullable("result", new ArrowType.Int(32, true)))
-//            val hashRelationKernel = new ExpressionEvaluator()
-//            hashRelationKernel.build(ctx.inputSchema, Lists.newArrayList(expression), true)
-//            val hashRelationResultIterator = hashRelationKernel.finishByIterator()
-//            dependentKernelIterators += hashRelationResultIterator
-//            // we need to set original recordBatch to hashRelationKernel
-//            while (depIter.hasNext) {
-//              val dep_cb = depIter.next()
-//              if (dep_cb.numRows > 0) {
-//                (0 until dep_cb.numCols).toList.foreach(i =>
-//                  dep_cb.column(i).asInstanceOf[ArrowWritableColumnVector].retain())
-//                buildRelationBatchHolder += dep_cb
-//                val dep_rb = ConverterUtils.createArrowRecordBatch(dep_cb)
-//                hashRelationResultIterator.processAndCacheOne(ctx.inputSchema, dep_rb)
-//                ConverterUtils.releaseArrowRecordBatch(dep_rb)
-//              }
-//            }
-//            // we need to set hashRelationObject to hashRelationResultIterator
-//            hashRelationResultIterator.setHashRelationObject(hashRelationObject)
-//            build_elapse += (System.nanoTime() - beforeEval)
-//            buildTime += ((System.nanoTime() - beforeEval) / 1000000)
-//            dependentKernels += hashRelationKernel
-//            iter
-//          }
-//        case p: ColumnarShuffledHashJoinExec =>
-//          val buildTime = p.longMetric("buildTime")
-//          val buildPlan = p.getBuildPlan
-//          curRDD.zipPartitions(buildPlan.executeColumnar()) { (iter, depIter) =>
-//            ExecutorManager.tryTaskSet(numaBindingInfo)
-//            val ctx = curPlan.asInstanceOf[TransformSupport].dependentPlanCtx
-//            val expression =
-//              TreeBuilder.makeExpression(
-//                ctx.root,
-//                Field.nullable("result", new ArrowType.Int(32, true)))
-//            val hashRelationKernel = new ExpressionEvaluator()
-//            hashRelationKernel.build(ctx.inputSchema, Lists.newArrayList(expression), true)
-//            var build_elapse_internal: Long = 0
-//            while (depIter.hasNext) {
-//              val dep_cb = depIter.next()
-//              if (dep_cb.numRows > 0) {
-//                (0 until dep_cb.numCols).toList.foreach(i =>
-//                  dep_cb.column(i).asInstanceOf[ArrowWritableColumnVector].retain())
-//                buildRelationBatchHolder += dep_cb
-//                val beforeEval = System.nanoTime()
-//                val dep_rb = ConverterUtils.createArrowRecordBatch(dep_cb)
-//                hashRelationKernel.evaluate(dep_rb)
-//                ConverterUtils.releaseArrowRecordBatch(dep_rb)
-//                build_elapse += System.nanoTime() - beforeEval
-//                build_elapse_internal += System.nanoTime() - beforeEval
-//              }
-//            }
-//            buildTime += (build_elapse_internal / 1000000)
-//            dependentKernels += hashRelationKernel
-//            dependentKernelIterators += hashRelationKernel.finishByIterator()
-//            iter
-//          }
-//        case other =>
-//          /* we should cache result from this operator */
-//          curRDD.zipPartitions(other.executeColumnar()) { (iter, depIter) =>
-//            ExecutorManager.tryTaskSet(numaBindingInfo)
-//            val curOutput = other match {
-//              case p: ColumnarSortMergeJoinExec => p.output_skip_alias
-//              case p: ColumnarBroadcastHashJoinExec => p.output_skip_alias
-//              case p: ColumnarShuffledHashJoinExec => p.output_skip_alias
-//              case p => p.output
-//            }
-//            val inputSchema = ConverterUtils.toArrowSchema(curOutput)
-//            val outputSchema = ConverterUtils.toArrowSchema(curOutput)
-//            if (!parentPlan.isInstanceOf[ColumnarSortMergeJoinExec]) {
-//              if (parentPlan == null) {
-//                throw new UnsupportedOperationException(
-//                  s"Only support use ${other.getClass} as buildPlan in ColumnarSortMergeJoin," +
-//                    s"while this parent Plan is null")
-//              } else {
-//                throw new UnsupportedOperationException(
-//                  s"Only support use ${other.getClass} as buildPlan in ColumnarSortMergeJoin," +
-//                    s"while this parent Plan is ${parentPlan.getClass}")
-//              }
-//            }
-//            val parent = parentPlan.asInstanceOf[ColumnarSortMergeJoinExec]
-//            val keyAttributes = if (other.equals(parent.buildPlan)) {
-//                parent.buildKeys.map(ConverterUtils.getAttrFromExpr(_))
-//              } else {
-//                parent.streamedKeys.map(ConverterUtils.getAttrFromExpr(_))
-//              }
-//            val cachedFunction = prepareRelationFunction(keyAttributes, curOutput)
-//            val expression =
-//              TreeBuilder.makeExpression(
-//                cachedFunction,
-//                Field.nullable("result", new ArrowType.Int(32, true)))
-//            val cachedRelationKernel = new ExpressionEvaluator()
-//            cachedRelationKernel.build(
-//              inputSchema,
-//              Lists.newArrayList(expression),
-//              outputSchema,
-//              true)
-//
-//            if (enableColumnarSortMergeJoinLazyRead) {
-//              // Used as ABI to prevent from serializing buffer data
-//              val serializedItr = new ColumnarNativeIterator(depIter.asJava)
-//              cachedRelationKernel.evaluate(serializedItr)
-//            } else {
-//              while (depIter.hasNext) {
-//                val dep_cb = depIter.next()
-//                if (dep_cb.numRows > 0) {
-//                  (0 until dep_cb.numCols).toList.foreach(i =>
-//                    dep_cb.column(i).asInstanceOf[ArrowWritableColumnVector].retain())
-//                  buildRelationBatchHolder += dep_cb
-//                  val dep_rb = ConverterUtils.createArrowRecordBatch(dep_cb)
-//                  cachedRelationKernel.evaluate(dep_rb)
-//                  ConverterUtils.releaseArrowRecordBatch(dep_rb)
-//                }
-//              }
-//            }
-//            dependentKernels += cachedRelationKernel
-//            val beforeEval = System.nanoTime()
-//            dependentKernelIterators += cachedRelationKernel.finishByIterator()
-//            build_elapse += System.nanoTime() - beforeEval
-//            iter
-//          }
-//      }
-//      idx += 1
-//    }
 
     // check if BatchScan exists
     var current_op = child
     while (current_op.isInstanceOf[TransformSupport] &&
-           !current_op.isInstanceOf[BatchScanExecTransformer] &&
-           current_op.asInstanceOf[TransformSupport].getChild != null) {
+      !current_op.isInstanceOf[BatchScanExecTransformer] &&
+      current_op.asInstanceOf[TransformSupport].getChild != null) {
       current_op = current_op.asInstanceOf[TransformSupport].getChild
     }
     val contains_batchscan = if (current_op != null &&
