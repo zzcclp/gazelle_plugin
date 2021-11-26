@@ -29,7 +29,8 @@ import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import com.intel.oap.spark.sql.execution.datasources.v2.arrow.ArrowScan
-import com.intel.oap.substrait.expression.ExpressionNode
+import com.intel.oap.substrait.`type`.TypeBuiler
+import com.intel.oap.substrait.expression.{ExpressionBuilder, ExpressionNode}
 import org.apache.spark.sql.execution.datasources.FilePartition
 
 class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan: Scan)
@@ -86,7 +87,33 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
   override def doValidate(): Boolean = false
 
   override def doTransform(args: Object): TransformContext = {
-    throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")
+    val typeNodes = ConverterUtils.getTypeNodeFromAttributes(output)
+    val nameList = new java.util.ArrayList[String]()
+    for (attr <- output) {
+      nameList.add(attr.name)
+    }
+    // Will put all filter expressions into an AND expression
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
+    val functionName = "AND"
+    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
+    if (!functionMap.containsKey(functionName)) {
+      functionMap.put(functionName, functionId)
+    } else {
+      functionId = functionMap.get(functionName)
+    }
+    val filterNodes = filterExprs.toList.map(expr => {
+      val transformer = ExpressionConverter.replaceWithExpressionTransformer(expr, output)
+      transformer.asInstanceOf[ExpressionTransformer].doTransform(args)
+    })
+    val expressionNodes = new java.util.ArrayList[ExpressionNode]()
+    for (filterNode <- filterNodes) {
+      expressionNodes.add(filterNode)
+    }
+    val typeNode = TypeBuiler.makeBoolean("res", true)
+    val filterNode = ExpressionBuilder
+      .makeScalarFunction(functionId, expressionNodes, typeNode)
+    val relNode = RelBuilder.makeReadRel(typeNodes, nameList, filterNode)
+    TransformContext(output, output, relNode)
   }
 
   override def doTransform(args: java.lang.Object,
@@ -99,16 +126,29 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
     for (attr <- output) {
       nameList.add(attr.name)
     }
+    // Will put all filter expressions into an AND expression
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
+    val functionName = "AND"
+    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
+    if (!functionMap.containsKey(functionName)) {
+      functionMap.put(functionName, functionId)
+    } else {
+      functionId = functionMap.get(functionName)
+    }
     val filterNodes = filterExprs.toList.map(expr => {
       val transformer = ExpressionConverter.replaceWithExpressionTransformer(expr, output)
       transformer.asInstanceOf[ExpressionTransformer].doTransform(args)
     })
-    val filterList = new java.util.ArrayList[ExpressionNode]()
+    val expressionNodes = new java.util.ArrayList[ExpressionNode]()
     for (filterNode <- filterNodes) {
-      filterList.add(filterNode)
+      expressionNodes.add(filterNode)
     }
+    val typeNode = TypeBuiler.makeBoolean("res", true)
+    val filterNode = ExpressionBuilder
+      .makeScalarFunction(functionId, expressionNodes, typeNode)
+
     val partNode = LocalFilesBuilder.makeLocalFiles(index, paths, starts, lengths)
-    val relNode = RelBuilder.makeReadRel(typeNodes, nameList, filterList, partNode)
+    val relNode = RelBuilder.makeReadRel(typeNodes, nameList, filterNode, partNode)
     TransformContext(output, output, relNode)
   }
 }

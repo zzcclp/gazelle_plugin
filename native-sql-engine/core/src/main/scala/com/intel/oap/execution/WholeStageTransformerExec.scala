@@ -70,7 +70,7 @@ trait TransformSupport extends SparkPlan {
 
   def doTransform(args: java.lang.Object): TransformContext
 
-  // This is used by cases containing batch scan.
+  /** This is used by cases containing BatchScan. */
   def doTransform(args: java.lang.Object,
                   index: java.lang.Integer,
                   paths: java.util.ArrayList[String],
@@ -471,6 +471,7 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
       false
     }
     if (contains_batchscan) {
+      // If containing batchscan, a new RDD is created.
       val execTempDir = GazellePluginConfig.getTempFile
       val jarList = listJars.map(jarUrl => {
         logWarning(s"Get Codegened library Jar ${jarUrl}")
@@ -481,7 +482,6 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
           sparkConf)
         s"${execTempDir}/spark-columnar-plugin-codegen-precompile-${signature}.jar"
       })
-      // Start Transform
       val batchScan = current_op.asInstanceOf[BatchScanExecTransformer]
       val wsRDD = new WholestageColumnarRDD(
         sparkContext, batchScan.partitions, batchScan.readerFactory,

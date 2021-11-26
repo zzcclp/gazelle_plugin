@@ -185,7 +185,7 @@ void SubstraitParser::ParseAggregateRel(const substrait::AggregateRel& sagg) {
   }
   auto agg_phase = sagg.phase();
   // Parse Input and Output types
-  std::cout << "Agg input and output:" << std::endl; 
+  std::cout << "Agg input and output:" << std::endl;
   for (auto& stype : sagg.input_types()) {
     ParseType(stype);
   }
@@ -226,17 +226,19 @@ void SubstraitParser::ParseReadRel(const substrait::ReadRel& sread) {
   // Parse local files
   if (sread.has_local_files()) {
     auto& local_files = sread.local_files();
+    auto index = local_files.index();
     auto& files_list = local_files.items();
     for (auto& file : files_list) {
       auto& uri_path = file.uri_path();
-      std::cout << "uri_path: " << uri_path << std::endl;
+      auto start = file.start();
+      auto length = file.length();
+      std::cout << "uri_path: " << uri_path << " start: " << start
+                << " length: " << length << std::endl;
     }
   }
-  auto& filters = sread.filter();
+  auto& sfilter = sread.filter();
   std::cout << "filter pushdown: " << std::endl;
-  for (auto& sfilter : filters) {
-    ParseExpression(sfilter);
-  }
+  ParseExpression(sfilter);
 }
 
 void SubstraitParser::ParseRel(const substrait::Rel& srel) {

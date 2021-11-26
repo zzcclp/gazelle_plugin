@@ -67,7 +67,7 @@ class WholestageColumnarRDD(
 
   private def castPartition(split: Partition): WholestageRDDPartition = split match {
     case p: WholestageRDDPartition => p
-    case _ => throw new SparkException(s"[BUG] Not a DataSourceRDDPartition: $split")
+    case _ => throw new SparkException(s"[BUG] Not a WholestageRDDPartition: $split")
   }
 
   private def doWholestageTransform(index: java.lang.Integer,
@@ -129,8 +129,7 @@ class WholestageColumnarRDD(
       private val inputMetrics = TaskContext.get().taskMetrics().inputMetrics
 
       override def hasNext: Boolean = {
-        val res = resIter.hasNext
-        res
+        resIter.hasNext
       }
 
       override def next(): Any = {

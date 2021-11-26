@@ -11,22 +11,22 @@ import java.util.ArrayList;
 public class ReadRelNode implements RelNode {
     private final ArrayList<TypeNode> types = new ArrayList<>();
     private final ArrayList<String> names = new ArrayList<>();
-    private final ArrayList<ExpressionNode> filters = new ArrayList<>();
+    private final ExpressionNode filterNode;
     private final LocalFilesNode partNode;
 
     ReadRelNode(ArrayList<TypeNode> types, ArrayList<String> names,
-                ArrayList<ExpressionNode> filters) {
+               ExpressionNode filterNode) {
         this.types.addAll(types);
         this.names.addAll(names);
-        this.filters.addAll(filters);
+        this.filterNode = filterNode;
         this.partNode = null;
     }
 
     ReadRelNode(ArrayList<TypeNode> types, ArrayList<String> names,
-                ArrayList<ExpressionNode> filters, LocalFilesNode partNode) {
+                ExpressionNode filterNode, LocalFilesNode partNode) {
         this.types.addAll(types);
         this.names.addAll(names);
-        this.filters.addAll(filters);
+        this.filterNode = filterNode;
         this.partNode = partNode;
     }
 
@@ -43,9 +43,7 @@ public class ReadRelNode implements RelNode {
         }
         ReadRel.Builder readBuilder = ReadRel.newBuilder();
         readBuilder.setBaseSchema(nStructBuilder.build());
-        for (ExpressionNode expressionNode : filters) {
-            readBuilder.addFilter(expressionNode.toProtobuf());
-        }
+        readBuilder.setFilter(filterNode.toProtobuf());
         if (partNode != null) {
             readBuilder.setLocalFiles(partNode.toProtobuf());
         }

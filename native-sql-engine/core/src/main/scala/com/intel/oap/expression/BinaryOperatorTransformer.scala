@@ -60,12 +60,12 @@ class AndTransformer(left: Expression, right: Expression, original: Expression)
       functionId = functionMap.get(functionName)
     }
 
-    val expressNodes = new java.util.ArrayList[ExpressionNode]()
-    expressNodes.add(left_node.asInstanceOf[ExpressionNode])
-    expressNodes.add(right_node.asInstanceOf[ExpressionNode])
+    val expressionNodes = new java.util.ArrayList[ExpressionNode]()
+    expressionNodes.add(left_node.asInstanceOf[ExpressionNode])
+    expressionNodes.add(right_node.asInstanceOf[ExpressionNode])
     val typeNode = TypeBuiler.makeBoolean("res", true)
 
-    ExpressionBuilder.makeScalarFunction(functionId, expressNodes, typeNode)
+    ExpressionBuilder.makeScalarFunction(functionId, expressionNodes, typeNode)
   }
 }
 
