@@ -153,6 +153,29 @@ case class ConditionProjectExecTransformer(
     TransformContext(inputAttributes, output, kernelFunction)
   }
 
+  override def doTransform(args: java.lang.Object,
+                           index: java.lang.Integer,
+                           paths: java.util.ArrayList[String],
+                           starts: java.util.ArrayList[java.lang.Long],
+                           lengths: java.util.ArrayList[java.lang.Long]): TransformContext = {
+    val (childCtx, kernelFunction) = child match {
+      case c: TransformSupport =>
+        val ctx = c.doTransform(args, index, paths, starts, lengths)
+        (ctx, getRelNode(args, ctx.root))
+      case _ =>
+        (null, getRelNode(args, null))
+    }
+    if (kernelFunction == null) {
+      return childCtx
+    }
+    val inputAttributes = if (childCtx != null) {
+      childCtx.inputAttributes
+    } else {
+      child.output
+    }
+    TransformContext(inputAttributes, output, kernelFunction)
+  }
+
   protected override def doExecute()
       : org.apache.spark.rdd.RDD[org.apache.spark.sql.catalyst.InternalRow] = {
     throw new UnsupportedOperationException(s"This operator doesn't support doExecute().")
@@ -247,6 +270,14 @@ case class UnionExecTransformer(children: Seq[SparkPlan]) extends SparkPlan with
   override def doValidate(): Boolean = false
 
   override def doTransform(args: Object): TransformContext = {
+    throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")
+  }
+
+  override def doTransform(args: java.lang.Object,
+                           index: java.lang.Integer,
+                           paths: java.util.ArrayList[String],
+                           starts: java.util.ArrayList[java.lang.Long],
+                           lengths: java.util.ArrayList[java.lang.Long]): TransformContext = {
     throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")
   }
 }

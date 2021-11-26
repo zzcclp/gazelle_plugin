@@ -20,7 +20,7 @@ package com.intel.oap.execution
 import com.google.common.collect.Lists
 import com.intel.oap.GazellePluginConfig
 import com.intel.oap.expression.{ConverterUtils, ExpressionConverter, ExpressionTransformer}
-import com.intel.oap.substrait.rel.RelBuilder
+import com.intel.oap.substrait.rel.{LocalFilesBuilder, RelBuilder}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory, Scan}
@@ -30,11 +30,11 @@ import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import com.intel.oap.spark.sql.execution.datasources.v2.arrow.ArrowScan
 import com.intel.oap.substrait.expression.ExpressionNode
+import org.apache.spark.sql.execution.datasources.FilePartition
 
 class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan: Scan)
     extends BatchScanExec(output, scan) with TransformSupport {
   val tmpDir: String = GazellePluginConfig.getConf.tmpFile
-  val filePath: String = scan.asInstanceOf[ArrowScan].options.get("path")
   val filterExprs: Seq[Expression] = scan.asInstanceOf[ArrowScan].dataFilters
   override def supportsColumnar(): Boolean = true
   override lazy val metrics = Map(
@@ -86,13 +86,19 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
   override def doValidate(): Boolean = false
 
   override def doTransform(args: Object): TransformContext = {
+    throw new UnsupportedOperationException(s"This operator doesn't support doTransform.")
+  }
+
+  override def doTransform(args: java.lang.Object,
+                           index: java.lang.Integer,
+                           paths: java.util.ArrayList[String],
+                           starts: java.util.ArrayList[java.lang.Long],
+                           lengths: java.util.ArrayList[java.lang.Long]): TransformContext = {
     val typeNodes = ConverterUtils.getTypeNodeFromAttributes(output)
     val nameList = new java.util.ArrayList[String]()
     for (attr <- output) {
       nameList.add(attr.name)
     }
-    val pathList = new java.util.ArrayList[String]()
-    pathList.add(filePath)
     val filterNodes = filterExprs.toList.map(expr => {
       val transformer = ExpressionConverter.replaceWithExpressionTransformer(expr, output)
       transformer.asInstanceOf[ExpressionTransformer].doTransform(args)
@@ -101,7 +107,8 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
     for (filterNode <- filterNodes) {
       filterList.add(filterNode)
     }
-    val relNode = RelBuilder.makeReadRel(typeNodes, nameList, pathList, filterList)
+    val partNode = LocalFilesBuilder.makeLocalFiles(index, paths, starts, lengths)
+    val relNode = RelBuilder.makeReadRel(typeNodes, nameList, filterList, partNode)
     TransformContext(output, output, relNode)
   }
 }

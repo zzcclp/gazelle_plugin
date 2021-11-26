@@ -52,7 +52,12 @@ public class RelBuilder {
   }
 
   public static RelNode makeReadRel(ArrayList<TypeNode> types, ArrayList<String> names,
-                                    ArrayList<String> paths, ArrayList<ExpressionNode> filters) {
-    return new ReadRelNode(types, names, paths, filters);
+                                    ArrayList<ExpressionNode> filters) {
+    return new ReadRelNode(types, names, filters);
+  }
+
+  public static RelNode makeReadRel(ArrayList<TypeNode> types, ArrayList<String> names,
+                                    ArrayList<ExpressionNode> filters, LocalFilesNode partNode) {
+    return new ReadRelNode(types, names, filters, partNode);
   }
 }

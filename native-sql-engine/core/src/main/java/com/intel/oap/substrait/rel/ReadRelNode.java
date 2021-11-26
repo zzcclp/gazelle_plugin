@@ -11,15 +11,23 @@ import java.util.ArrayList;
 public class ReadRelNode implements RelNode {
     private final ArrayList<TypeNode> types = new ArrayList<>();
     private final ArrayList<String> names = new ArrayList<>();
-    private final ArrayList<String> paths = new ArrayList<>();
     private final ArrayList<ExpressionNode> filters = new ArrayList<>();
+    private final LocalFilesNode partNode;
 
     ReadRelNode(ArrayList<TypeNode> types, ArrayList<String> names,
-                ArrayList<String> paths, ArrayList<ExpressionNode> filters) {
+                ArrayList<ExpressionNode> filters) {
         this.types.addAll(types);
         this.names.addAll(names);
-        this.paths.addAll(paths);
         this.filters.addAll(filters);
+        this.partNode = null;
+    }
+
+    ReadRelNode(ArrayList<TypeNode> types, ArrayList<String> names,
+                ArrayList<ExpressionNode> filters, LocalFilesNode partNode) {
+        this.types.addAll(types);
+        this.names.addAll(names);
+        this.filters.addAll(filters);
+        this.partNode = partNode;
     }
 
     @Override
@@ -33,19 +41,13 @@ public class ReadRelNode implements RelNode {
         for (String name : names) {
             nStructBuilder.addNames(name);
         }
-        ReadRel.LocalFiles.Builder localFilesBuilder =
-                ReadRel.LocalFiles.newBuilder();
-        for (String path : paths) {
-            ReadRel.LocalFiles.FileOrFiles.Builder fileBuiler =
-                    ReadRel.LocalFiles.FileOrFiles.newBuilder();
-            fileBuiler.setUriPath(path);
-            localFilesBuilder.addItems(fileBuiler.build());
-        }
         ReadRel.Builder readBuilder = ReadRel.newBuilder();
         readBuilder.setBaseSchema(nStructBuilder.build());
-        readBuilder.setLocalFiles(localFilesBuilder.build());
         for (ExpressionNode expressionNode : filters) {
             readBuilder.addFilter(expressionNode.toProtobuf());
+        }
+        if (partNode != null) {
+            readBuilder.setLocalFiles(partNode.toProtobuf());
         }
         Rel.Builder builder = Rel.newBuilder();
         builder.setRead(readBuilder.build());
