@@ -361,6 +361,7 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
           s"${execTempDir}/spark-columnar-plugin-codegen-precompile-${signature}.jar"
         })
         // FIXME: pass iter to native with Substrait
+
         val lazyReadFunction = prepareLazyReadFunction()
         val lazyReadExpr =
           TreeBuilder.makeExpression(
