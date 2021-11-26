@@ -120,8 +120,9 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <arrow.script.dir>${project.basedir}/script</arrow.script.dir>
+    <build_cpp>OFF</build_cpp>
     <cpp_tests>OFF</cpp_tests>
-    <build_arrow>ON</build_arrow>
+    <build_arrow>OFF</build_arrow>
     <static_arrow>OFF</static_arrow>
     <arrow.install.dir>${arrow.script.dir}/build/arrow_install</arrow.install.dir>
     <arrow_root>/usr/local</arrow_root>
@@ -161,6 +162,12 @@
             <artifactId>curator-recipes</artifactId>
           </exclusion>
         </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-network-shuffle_${scala.binary.version}</artifactId>
+        <version>${spark.version}</version>
+        <scope>provided</scope>
       </dependency>
       <dependency>
         <groupId>org.apache.spark</groupId>

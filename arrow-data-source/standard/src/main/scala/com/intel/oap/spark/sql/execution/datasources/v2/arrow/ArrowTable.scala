@@ -16,13 +16,15 @@
  */
 package com.intel.oap.spark.sql.execution.datasources.v2.arrow
 
-import org.apache.arrow.memory.AllocationListener
+import scala.collection.JavaConverters._
+
 import org.apache.hadoop.fs.FileStatus
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.connector.read.ScanBuilder
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, WriteBuilder}
 import org.apache.spark.sql.execution.datasources.FileFormat
+import org.apache.spark.sql.execution.datasources.parquet.ParquetUtils
 import org.apache.spark.sql.execution.datasources.v2.FileTable
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -37,7 +39,9 @@ case class ArrowTable(
     extends FileTable(sparkSession, options, paths, userSpecifiedSchema) {
 
   override def inferSchema(files: Seq[FileStatus]): Option[StructType] = {
-    ArrowUtils.readSchema(files, options)
+    // val a = ArrowUtils.readSchema(files, options)
+    ParquetUtils.inferSchema(sparkSession,
+      options.asCaseSensitiveMap().asScala.toMap, files)
   }
 
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {

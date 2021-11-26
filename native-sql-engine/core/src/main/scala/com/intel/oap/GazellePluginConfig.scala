@@ -17,7 +17,6 @@
 
 package com.intel.oap
 
-import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.internal.SQLConf
 
@@ -28,7 +27,7 @@ case class GazelleNumaBindingInfo(
 
 class GazellePluginConfig(conf: SQLConf) extends Logging {
   def getCpu(): Boolean = {
-    val source = scala.io.Source.fromFile("/proc/cpuinfo")
+    /* val source = scala.io.Source.fromFile("/proc/cpuinfo")
     val lines = try source.mkString finally source.close()
     //TODO(): check CPU flags to enable/disable AVX512
     if (lines.contains("GenuineIntel")) {
@@ -37,7 +36,8 @@ class GazellePluginConfig(conf: SQLConf) extends Logging {
       //System.out.println(actualSchemaRoot.getRowCount());
       logWarning("running on non-intel CPU, disable all columnar operators")
       return false
-    }
+    } */
+    true
   }
 
   // for all operators
@@ -73,6 +73,9 @@ class GazellePluginConfig(conf: SQLConf) extends Logging {
 
   val enableArrowColumnarToRow: Boolean =
     conf.getConfString("spark.oap.sql.columnar.columnartorow", "true").toBoolean && enableCpu
+
+  val enableSparkColumnarToRow: Boolean =
+    conf.getConfString("spark.oap.sql.spark.columnartorow", "false").toBoolean
 
   val forceShuffledHashJoin: Boolean =
     conf.getConfString("spark.oap.sql.columnar.forceshuffledhashjoin", "false").toBoolean &&

@@ -20,7 +20,7 @@ package com.intel.oap
 import com.intel.oap.execution._
 import com.intel.oap.extension.columnar.{RowGuard, TransformGuardRule}
 import com.intel.oap.sql.execution.RowToArrowColumnarExec
-import org.apache.spark.internal.config._
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.catalyst.expressions._
@@ -35,7 +35,6 @@ import org.apache.spark.sql.execution.joins._
 import org.apache.spark.sql.execution.python.{ArrowEvalPythonExec, ArrowEvalPythonExecTransformer}
 import org.apache.spark.sql.execution.window.WindowExec
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.CalendarIntervalType
 
 case class TransformPreOverrides() extends Rule[SparkPlan] {
   val columnarConf: GazellePluginConfig = GazellePluginConfig.getSessionConf
@@ -371,7 +370,9 @@ case class ColumnarOverrideRules(session: SparkSession) extends ColumnarRule wit
       isSupportAdaptive = supportAdaptive(plan)
       val rule = preOverrides
       rule.setAdaptiveSupport(isSupportAdaptive)
-      rule(rowGuardOverrides(plan))
+      val guardPlan = rowGuardOverrides(plan)
+      val newPl = rule(guardPlan)
+      newPl
     } else {
       plan
     }
@@ -382,7 +383,8 @@ case class ColumnarOverrideRules(session: SparkSession) extends ColumnarRule wit
       val rule = postOverrides
       rule.setAdaptiveSupport(isSupportAdaptive)
       val tmpPlan = rule(plan)
-      collapseOverrides(tmpPlan)
+      val newPl = collapseOverrides(tmpPlan)
+      newPl
     } else {
       plan
     }

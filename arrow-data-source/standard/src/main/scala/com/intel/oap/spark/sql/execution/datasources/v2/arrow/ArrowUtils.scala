@@ -18,7 +18,6 @@
 package com.intel.oap.spark.sql.execution.datasources.v2.arrow
 
 import java.net.URI
-import java.time.ZoneId
 
 import scala.collection.JavaConverters._
 
@@ -29,14 +28,11 @@ import org.apache.arrow.vector.types.pojo.Schema
 import org.apache.hadoop.fs.FileStatus
 
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.v2.arrow.{SparkMemoryUtils, SparkSchemaUtils}
 import org.apache.spark.sql.execution.vectorized.ColumnVectorUtils
-import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
-import org.apache.spark.sql.vectorized.ColumnVector
-import org.apache.spark.sql.vectorized.ColumnarBatch
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 
 object ArrowUtils {
 
@@ -60,12 +56,17 @@ object ArrowUtils {
   }
 
   def isOriginalFormatSplitable(options: ArrowOptions): Boolean = {
-    val format = getFormat(options)
+    /* val format = getFormat(options)
     format match {
       case _: org.apache.arrow.dataset.file.format.ParquetFileFormat =>
         true
       case _ =>
         false
+    } */
+    options.originalFormat match {
+      case "parquet" => true
+      case "csv" => false
+      case _ => throw new IllegalArgumentException("Unrecognizable format")
     }
   }
 
