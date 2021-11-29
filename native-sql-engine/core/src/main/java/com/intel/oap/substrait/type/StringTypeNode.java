@@ -2,7 +2,9 @@ package com.intel.oap.substrait.type;
 
 import io.substrait.Type;
 
-public class StringTypeNode implements TypeNode {
+import java.io.Serializable;
+
+public class StringTypeNode implements TypeNode, Serializable {
     private final String name;
     private final Boolean nullable;
 

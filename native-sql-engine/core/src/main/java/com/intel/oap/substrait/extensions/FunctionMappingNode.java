@@ -19,7 +19,9 @@ package com.intel.oap.substrait.extensions;
 
 import io.substrait.*;
 
-public class FunctionMappingNode implements MappingNode {
+import java.io.Serializable;
+
+public class FunctionMappingNode implements MappingNode, Serializable {
     private final String name;
     private final Long functionId;
 

@@ -19,7 +19,9 @@ package com.intel.oap.substrait.expression;
 
 import io.substrait.*;
 
-public class DoubleLiteralNode implements ExpressionNode {
+import java.io.Serializable;
+
+public class DoubleLiteralNode implements ExpressionNode, Serializable {
     private final Double value;
 
     public DoubleLiteralNode(Double value) {

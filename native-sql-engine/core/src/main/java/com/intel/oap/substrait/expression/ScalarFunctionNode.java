@@ -20,9 +20,10 @@ package com.intel.oap.substrait.expression;
 import com.intel.oap.substrait.type.TypeNode;
 import io.substrait.*;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
-public class ScalarFunctionNode implements ExpressionNode {
+public class ScalarFunctionNode implements ExpressionNode, Serializable {
     private final Long functionId;
     private final ArrayList<ExpressionNode> expressionNodes = new ArrayList<>();
     private final TypeNode typeNode;

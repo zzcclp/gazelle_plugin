@@ -6,9 +6,10 @@ import io.substrait.ReadRel;
 import io.substrait.Rel;
 import io.substrait.Type;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
-public class ReadRelNode implements RelNode {
+public class ReadRelNode implements RelNode, Serializable {
     private final ArrayList<TypeNode> types = new ArrayList<>();
     private final ArrayList<String> names = new ArrayList<>();
     private final ExpressionNode filterNode;

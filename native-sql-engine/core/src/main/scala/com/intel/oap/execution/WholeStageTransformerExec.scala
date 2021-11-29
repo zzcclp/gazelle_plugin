@@ -460,7 +460,8 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
 
     // check if BatchScan exists
     var current_op = child
-    while (!current_op.isInstanceOf[BatchScanExecTransformer] &&
+    while (current_op.isInstanceOf[TransformSupport] &&
+           !current_op.isInstanceOf[BatchScanExecTransformer] &&
            current_op.asInstanceOf[TransformSupport].getChild != null) {
       current_op = current_op.asInstanceOf[TransformSupport].getChild
     }
@@ -512,8 +513,7 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
             sparkConf)
           s"${execTempDir}/spark-columnar-plugin-codegen-precompile-${signature}.jar"
         })
-
-        // Start Transform
+        // FIXME: pass iter to native with Substrait
         val lazyReadFunction = prepareLazyReadFunction()
         val lazyReadExpr =
           TreeBuilder.makeExpression(

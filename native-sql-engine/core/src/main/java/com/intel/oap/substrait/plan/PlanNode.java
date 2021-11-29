@@ -21,9 +21,10 @@ import com.intel.oap.substrait.extensions.MappingNode;
 import com.intel.oap.substrait.rel.RelNode;
 import io.substrait.*;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
-public class PlanNode {
+public class PlanNode implements Serializable {
     private final ArrayList<MappingNode> mappingNodes = new ArrayList<>();
     private final ArrayList<RelNode> relNodes = new ArrayList<>();
 

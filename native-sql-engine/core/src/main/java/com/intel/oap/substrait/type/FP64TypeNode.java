@@ -19,7 +19,9 @@ package com.intel.oap.substrait.type;
 
 import io.substrait.*;
 
-public class FP64TypeNode implements TypeNode {
+import java.io.Serializable;
+
+public class FP64TypeNode implements TypeNode, Serializable {
     private final String name;
     private final Boolean nullable;
 

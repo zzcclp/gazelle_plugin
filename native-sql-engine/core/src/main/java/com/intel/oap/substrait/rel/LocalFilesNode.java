@@ -19,9 +19,10 @@ package com.intel.oap.substrait.rel;
 
 import io.substrait.ReadRel;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
-public class LocalFilesNode {
+public class LocalFilesNode implements Serializable {
     private final Integer index;
     private final ArrayList<String> paths = new ArrayList<>();
     private final ArrayList<Long> starts = new ArrayList<>();

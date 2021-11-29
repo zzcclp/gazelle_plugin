@@ -21,9 +21,10 @@ import com.intel.oap.substrait.expression.ExpressionNode;
 import com.intel.oap.substrait.type.TypeNode;
 import io.substrait.*;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
-public class FilterRelNode implements RelNode {
+public class FilterRelNode implements RelNode, Serializable {
     private final RelNode input;
     private final ExpressionNode condition;
     private final ArrayList<TypeNode> types = new ArrayList<>();

@@ -19,7 +19,9 @@ package com.intel.oap.substrait.derivation;
 
 import io.substrait.*;
 
-public class DerivationFP64TypeNode implements DerivationExpressionNode {
+import java.io.Serializable;
+
+public class DerivationFP64TypeNode implements DerivationExpressionNode, Serializable {
     private final String name;
     private final Boolean nullable;
 

@@ -19,7 +19,9 @@ package com.intel.oap.substrait.derivation;
 
 import io.substrait.*;
 
-public class BinaryOPNode implements DerivationExpressionNode {
+import java.io.Serializable;
+
+public class BinaryOPNode implements DerivationExpressionNode, Serializable {
     private final String op;
     private final DerivationExpressionNode arg1;
     private final DerivationExpressionNode arg2;

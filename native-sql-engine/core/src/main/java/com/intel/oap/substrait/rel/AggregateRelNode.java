@@ -24,9 +24,10 @@ import io.substrait.AggregateRel;
 import io.substrait.Expression;
 import io.substrait.Rel;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
-public class AggregateRelNode implements RelNode {
+public class AggregateRelNode implements RelNode, Serializable {
     private final RelNode input;
     private final ArrayList<Integer> groupings = new ArrayList<>();
     private final ArrayList<AggregateFunctionNode> aggregateFunctionNodes =

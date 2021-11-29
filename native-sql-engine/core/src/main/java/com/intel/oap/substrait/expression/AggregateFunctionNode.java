@@ -22,9 +22,10 @@ import com.intel.oap.substrait.type.TypeNode;
 import io.substrait.Expression;
 import io.substrait.Extensions;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
-public class AggregateFunctionNode {
+public class AggregateFunctionNode implements Serializable {
     private final Long functionId;
     private final ArrayList<ExpressionNode> expressionNodes = new ArrayList<>();
     private final String phase;

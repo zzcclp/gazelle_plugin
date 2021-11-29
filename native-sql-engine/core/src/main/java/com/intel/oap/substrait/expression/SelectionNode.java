@@ -19,7 +19,9 @@ package com.intel.oap.substrait.expression;
 
 import io.substrait.*;
 
-public class SelectionNode implements ExpressionNode {
+import java.io.Serializable;
+
+public class SelectionNode implements ExpressionNode, Serializable {
     private final Integer fieldIdx;
 
     SelectionNode(Integer fieldIdx) {
