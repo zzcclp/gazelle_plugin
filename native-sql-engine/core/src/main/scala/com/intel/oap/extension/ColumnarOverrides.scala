@@ -372,7 +372,7 @@ case class ColumnarOverrideRules(session: SparkSession) extends ColumnarRule wit
       rule.setAdaptiveSupport(isSupportAdaptive)
       val guardPlan = rowGuardOverrides(plan)
       val newPl = rule(guardPlan)
-      guardPlan
+      newPl
     } else {
       plan
     }

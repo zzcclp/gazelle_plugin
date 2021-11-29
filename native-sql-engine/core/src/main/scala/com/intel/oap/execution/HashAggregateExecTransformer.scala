@@ -17,50 +17,24 @@
 
 package com.intel.oap.execution
 
-import java.util
+import scala.collection.mutable.ListBuffer
 
-import com.intel.oap.GazellePluginConfig
-import com.intel.oap.expression._
-import com.intel.oap.vectorized._
 import com.google.common.collect.Lists
-import java.util.concurrent.TimeUnit._
-
+import com.intel.oap.expression._
 import com.intel.oap.substrait.expression.{AggregateFunctionNode, ExpressionBuilder, ExpressionNode}
 import com.intel.oap.substrait.rel.{RelBuilder, RelNode}
-import org.apache.arrow.gandiva.expression._
-import org.apache.arrow.gandiva.evaluator._
-import org.apache.arrow.vector.types.pojo.ArrowType
-import org.apache.arrow.vector.types.pojo.Field
-import org.apache.arrow.vector.types.pojo.Schema
-import org.apache.spark.TaskContext
-import org.apache.spark.memory.{SparkOutOfMemoryError, TaskMemoryManager}
+import java.util
+
 import org.apache.spark.rdd.RDD
-import org.apache.spark.util.{ExecutorManager, UserAddedJarUtils, Utils}
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.errors._
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReferences
 import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.expressions.codegen._
-import org.apache.spark.sql.catalyst.expressions.codegen.Block._
-import org.apache.spark.sql.catalyst.plans.physical._
-import org.apache.spark.sql.catalyst.util.DateTimeUtils._
 import org.apache.spark.sql.catalyst.util.truncatedString
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.aggregate._
-import org.apache.spark.sql.execution.datasources.v2.arrow.SparkMemoryUtils
-import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
-import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
-import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
-import org.apache.spark.sql.util.ArrowUtils
-import org.apache.spark.sql.types._
-import org.apache.spark.unsafe.KVIterator
-
-import scala.collection.JavaConverters._
-import scala.collection.Iterator
-import scala.collection.mutable.ListBuffer
-import scala.util.control.Breaks._
+import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
+import org.apache.spark.sql.execution.metric.SQLMetrics
+import org.apache.spark.sql.vectorized.ColumnarBatch
 
 /**
  * Columnar Based HashAggregateExec.
@@ -114,7 +88,10 @@ case class HashAggregateExecTransformer(
   numInputBatches.set(0)
 
   override def doValidate(): Boolean = {
-    true
+    val childOpt = this.find(child => {
+      child.isInstanceOf[ShuffleExchangeExec]
+    })
+    !childOpt.isDefined
   }
 
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
