@@ -1,0 +1,14 @@
+Ê
+Ç\
+petal_length
+petal_width
+sepal_length
+sepal_width
+type
+Z
+Z
+Z
+Z
+:2g
+e
+c/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/utils/local-engine/tests/data/iris.parquet

@@ -331,7 +331,7 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
         s"${execTempDir}/spark-columnar-plugin-codegen-precompile-${signature}.jar"
       })
       val batchScan = current_op.asInstanceOf[BatchScanExecTransformer]
-      val wsRDD = new WholestageColumnarRDD(
+      val wsRDD = new WholestageClickhouseRDD(
         sparkContext, batchScan.partitions, batchScan.readerFactory,
         true, child, jarList, dependentKernelIterators,
         execTempDir)

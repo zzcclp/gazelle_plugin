@@ -17,21 +17,20 @@
 
 package com.intel.oap.execution
 
-import com.google.common.collect.Lists
 import com.intel.oap.GazellePluginConfig
 import com.intel.oap.expression.{ConverterUtils, ExpressionConverter, ExpressionTransformer}
-import com.intel.oap.substrait.rel.{LocalFilesBuilder, RelBuilder}
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory, Scan}
-import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
-import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import com.intel.oap.spark.sql.execution.datasources.v2.arrow.ArrowScan
 import com.intel.oap.substrait.`type`.TypeBuiler
 import com.intel.oap.substrait.expression.{ExpressionBuilder, ExpressionNode}
-import org.apache.spark.sql.execution.datasources.FilePartition
+import com.intel.oap.substrait.rel.{LocalFilesBuilder, RelBuilder}
+
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.connector.read.Scan
+import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
+import org.apache.spark.sql.execution.metric.SQLMetrics
+import org.apache.spark.sql.vectorized.ColumnarBatch
 
 class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan: Scan)
     extends BatchScanExec(output, scan) with TransformSupport {
@@ -143,9 +142,12 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
     for (filterNode <- filterNodes) {
       expressionNodes.add(filterNode)
     }
-    val typeNode = TypeBuiler.makeBoolean("res", true)
-    val filterNode = ExpressionBuilder
-      .makeScalarFunction(functionId, expressionNodes, typeNode)
+    val filterNode = if (!expressionNodes.isEmpty) {
+      val typeNode = TypeBuiler.makeBoolean("res", true)
+      ExpressionBuilder.makeScalarFunction(functionId, expressionNodes, typeNode)
+    } else {
+      null
+    }
 
     val partNode = LocalFilesBuilder.makeLocalFiles(index, paths, starts, lengths)
     val relNode = RelBuilder.makeReadRel(typeNodes, nameList, filterNode, partNode)

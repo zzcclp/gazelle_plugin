@@ -17,7 +17,6 @@
 
 package com.intel.oap.execution
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 import com.google.common.collect.Lists
@@ -30,11 +29,11 @@ import org.apache.spark._
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory}
+import org.apache.spark.sql.execution.arrow.CHBatchIterator
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.datasources.FilePartition
-import org.apache.spark.sql.util.ArrowUtils
 import org.apache.spark.sql.util.OASPackageBridge._
-import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
+import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.util._
 
 class WholestageClickhouseRDD(
@@ -97,7 +96,7 @@ class WholestageClickhouseRDD(
       case p: FilePartition =>
         index = new java.lang.Integer(p.index)
         p.files.foreach { f =>
-          paths.add(f.filePath)
+          paths.add(f.filePath.substring(7))
           starts.add(new java.lang.Long(f.start))
           lengths.add(new java.lang.Long(f.length))}
       case other =>
@@ -105,15 +104,16 @@ class WholestageClickhouseRDD(
     }
 
     val wsCtx = doWholestageTransform(index, paths, starts, lengths)
-    val transKernel = new ExpressionEvaluator(jarList.toList.asJava)
+    // val transKernel = new ExpressionEvaluator(jarList.toList.asJava)
     val inBatchIter: ColumnarNativeIterator = null
     val inputSchema = ConverterUtils.toArrowSchema(wsCtx.inputAttributes)
     val outputSchema = ConverterUtils.toArrowSchema(wsCtx.outputAttributes)
     // FIXME: the 4th. and 5th. parameters are not needed for this case
-    val resIter = transKernel.createKernelWithIterator(
+    /* val resIter = transKernel.createKernelWithIterator(
       inputSchema, wsCtx.root, outputSchema,
       Lists.newArrayList(), inBatchIter,
-      dependentKernelIterators.toArray, true)
+      dependentKernelIterators.toArray, true) */
+    val resIter = new CHBatchIterator(wsCtx.root.toProtobuf.toByteArray)
 
     val iter = new Iterator[Any] {
       private val inputMetrics = TaskContext.get().taskMetrics().inputMetrics
@@ -126,17 +126,19 @@ class WholestageClickhouseRDD(
         if (!hasNext) {
           throw new java.util.NoSuchElementException("End of stream")
         }
-        val rb = resIter.next()
+        /* val output = resIter.next1()
         if (rb == null) {
           val resultStructType = ArrowUtils.fromArrowSchema(outputSchema)
           val resultColumnVectors =
             ArrowWritableColumnVector.allocateColumns(0, resultStructType).toArray
           return new ColumnarBatch(resultColumnVectors.map(_.asInstanceOf[ColumnVector]), 0)
         }
-        val outputNumRows = rb.getLength
-        val output = ConverterUtils.fromArrowRecordBatch(outputSchema, rb)
-        ConverterUtils.releaseArrowRecordBatch(rb)
-        val cb = new ColumnarBatch(output.map(v => v.asInstanceOf[ColumnVector]), outputNumRows)
+        val outputNumRows = rb.getRowCount
+        //val output = ConverterUtils.fromArrowRecordBatch(outputSchema, rb, allocator)
+        //ConverterUtils.releaseArrowRecordBatch(rb)
+        val output = ArrowWritableColumnVector.loadColumns(rb.getRowCount, rb.getFieldVectors) */
+        // val cb = new ColumnarBatch(output.map(v => v.asInstanceOf[ColumnVector]), outputNumRows)
+        val cb = resIter.next1()
         val bytes: Long = cb match {
           case batch: ColumnarBatch =>
             (0 until batch.numCols()).map { i =>

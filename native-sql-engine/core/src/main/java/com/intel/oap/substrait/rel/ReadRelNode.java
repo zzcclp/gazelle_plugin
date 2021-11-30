@@ -44,7 +44,9 @@ public class ReadRelNode implements RelNode, Serializable {
         }
         ReadRel.Builder readBuilder = ReadRel.newBuilder();
         readBuilder.setBaseSchema(nStructBuilder.build());
-        readBuilder.setFilter(filterNode.toProtobuf());
+        if (filterNode != null) {
+            readBuilder.setFilter(filterNode.toProtobuf());
+        }
         if (partNode != null) {
             readBuilder.setLocalFiles(partNode.toProtobuf());
         }
