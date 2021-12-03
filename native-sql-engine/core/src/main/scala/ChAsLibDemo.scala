@@ -236,10 +236,10 @@ object ChAsLibDemo {
     dataSourceMap.foreach {
       case (key, value) => value.createOrReplaceTempView(key)
     }
-    spark.sql(
+    /*spark.sql(
       """
         | show tables;
-        |""".stripMargin).show(200, false)
+        |""".stripMargin).show(200, false)*/
   }
 
   def testQ6(spark: SparkSession): Unit = {

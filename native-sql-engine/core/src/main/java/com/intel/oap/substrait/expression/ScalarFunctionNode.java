@@ -18,7 +18,7 @@
 package com.intel.oap.substrait.expression;
 
 import com.intel.oap.substrait.type.TypeNode;
-import io.substrait.*;
+import io.substrait.proto.*;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -37,13 +37,13 @@ public class ScalarFunctionNode implements ExpressionNode, Serializable {
 
     @Override
     public Expression toProtobuf() {
-        Extensions.FunctionId.Builder functionIdBuilder =
+        /*Extensions.FunctionId.Builder functionIdBuilder =
                 Extensions.FunctionId.newBuilder();
-        functionIdBuilder.setId(functionId);
+        functionIdBuilder.setId(functionId);*/
 
         Expression.ScalarFunction.Builder scalarBuilder =
                 Expression.ScalarFunction.newBuilder();
-        scalarBuilder.setId(functionIdBuilder.build());
+        //scalarBuilder.setId(functionIdBuilder.build());
         for (ExpressionNode expressionNode : expressionNodes) {
             scalarBuilder.addArgs(expressionNode.toProtobuf());
         }

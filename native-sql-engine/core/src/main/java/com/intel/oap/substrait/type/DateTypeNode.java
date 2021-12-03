@@ -1,6 +1,6 @@
 package com.intel.oap.substrait.type;
 
-import io.substrait.Type;
+import io.substrait.proto.Type;
 
 import java.io.Serializable;
 
@@ -15,15 +15,15 @@ public class DateTypeNode implements TypeNode, Serializable {
 
     @Override
     public Type toProtobuf() {
-        Type.Variation.Builder variationBuilder = Type.Variation.newBuilder();
-        variationBuilder.setName(name);
+        /* Type.Variation.Builder variationBuilder = Type.Variation.newBuilder();
+        variationBuilder.setName(name); */
 
         Type.Date.Builder dateBuilder = Type.Date.newBuilder();
-        dateBuilder.setVariation(variationBuilder.build());
+        // dateBuilder.setVariation(variationBuilder.build());
         if (nullable) {
-            dateBuilder.setNullability(Type.Nullability.NULLABLE);
+            dateBuilder.setNullability(Type.Nullability.NULLABILITY_NULLABLE);
         } else {
-            dateBuilder.setNullability(Type.Nullability.REQUIRED);
+            dateBuilder.setNullability(Type.Nullability.NULLABILITY_REQUIRED);
         }
         Type.Builder builder = Type.newBuilder();
         builder.setDate(dateBuilder.build());

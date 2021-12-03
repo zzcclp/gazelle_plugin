@@ -17,7 +17,7 @@
 
 package com.intel.oap.substrait.type;
 
-import io.substrait.Type;
+import io.substrait.proto.Type;
 
 public class I32TypeNode implements TypeNode {
     private final String name;
@@ -30,15 +30,15 @@ public class I32TypeNode implements TypeNode {
 
     @Override
     public Type toProtobuf() {
-        Type.Variation.Builder variationBuilder = Type.Variation.newBuilder();
-        variationBuilder.setName(name);
+        /*Type.Variation.Builder variationBuilder = Type.Variation.newBuilder();
+        variationBuilder.setName(name);*/
 
         Type.I32.Builder i32Builder = Type.I32.newBuilder();
-        i32Builder.setVariation(variationBuilder.build());
+        //i32Builder.setVariation(variationBuilder.build());
         if (nullable) {
-            i32Builder.setNullability(Type.Nullability.NULLABLE);
+            i32Builder.setNullability(Type.Nullability.NULLABILITY_NULLABLE);
         } else {
-            i32Builder.setNullability(Type.Nullability.REQUIRED);
+            i32Builder.setNullability(Type.Nullability.NULLABILITY_REQUIRED);
         }
 
         Type.Builder builder = Type.newBuilder();

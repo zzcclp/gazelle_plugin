@@ -20,9 +20,7 @@ package com.intel.oap.substrait.rel;
 import com.intel.oap.substrait.expression.AggregateFunctionNode;
 import com.intel.oap.substrait.expression.ExpressionNode;
 import com.intel.oap.substrait.type.TypeNode;
-import io.substrait.AggregateRel;
-import io.substrait.Expression;
-import io.substrait.Rel;
+import io.substrait.proto.*;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -56,9 +54,9 @@ public class AggregateRelNode implements RelNode, Serializable {
     public Rel toProtobuf() {
         AggregateRel.Grouping.Builder groupingBuilder =
                 AggregateRel.Grouping.newBuilder();
-        for (Integer integer : groupings) {
+        /*for (Integer integer : groupings) {
             groupingBuilder.addInputFields(integer.intValue());
-        }
+        }*/
 
         AggregateRel.Builder aggBuilder = AggregateRel.newBuilder();
         aggBuilder.addGroupings(groupingBuilder.build());
@@ -71,8 +69,8 @@ public class AggregateRelNode implements RelNode, Serializable {
         if (input != null) {
             aggBuilder.setInput(input.toProtobuf());
         }
-        if (phase == null) {
-            aggBuilder.setPhase(Expression.AggregationPhase.UNKNOWN);
+        /*if (phase == null) {
+            aggBuilder.setPhase(AggregationPhase.AGGREGATION_PHASE_UNSPECIFIED);
         } else {
             switch(phase) {
                 case "PARTIAL":
@@ -96,7 +94,7 @@ public class AggregateRelNode implements RelNode, Serializable {
         }
         for (ExpressionNode expressionNode : resExprNodes) {
             aggBuilder.addResultExpressions(expressionNode.toProtobuf());
-        }
+        }*/
         Rel.Builder builder = Rel.newBuilder();
         builder.setAggregate(aggBuilder.build());
         return builder.build();

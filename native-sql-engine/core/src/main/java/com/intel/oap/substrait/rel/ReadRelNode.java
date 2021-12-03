@@ -2,9 +2,7 @@ package com.intel.oap.substrait.rel;
 
 import com.intel.oap.substrait.expression.ExpressionNode;
 import com.intel.oap.substrait.type.TypeNode;
-import io.substrait.ReadRel;
-import io.substrait.Rel;
-import io.substrait.Type;
+import io.substrait.proto.*;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -37,7 +35,7 @@ public class ReadRelNode implements RelNode, Serializable {
         for (TypeNode typeNode : types) {
             structBuilder.addTypes(typeNode.toProtobuf());
         }
-        Type.NamedStruct.Builder nStructBuilder = Type.NamedStruct.newBuilder();
+        NamedStruct.Builder nStructBuilder = NamedStruct.newBuilder();
         nStructBuilder.setStruct(structBuilder.build());
         for (String name : names) {
             nStructBuilder.addNames(name);

@@ -17,7 +17,7 @@
 
 package com.intel.oap.substrait.type;
 
-import io.substrait.Type;
+import io.substrait.proto.Type;
 
 public class I64TypeNode implements TypeNode {
     private final String name;
@@ -30,15 +30,15 @@ public class I64TypeNode implements TypeNode {
 
     @Override
     public Type toProtobuf() {
-        Type.Variation.Builder variationBuilder = Type.Variation.newBuilder();
-        variationBuilder.setName(name);
+        /*Type.Variation.Builder variationBuilder = Type.Variation.newBuilder();
+        variationBuilder.setName(name);*/
 
         Type.I64.Builder i64Builder = Type.I64.newBuilder();
-        i64Builder.setVariation(variationBuilder.build());
+        //i64Builder.setVariation(variationBuilder.build());
         if (nullable) {
-            i64Builder.setNullability(Type.Nullability.NULLABLE);
+            i64Builder.setNullability(Type.Nullability.NULLABILITY_NULLABLE);
         } else {
-            i64Builder.setNullability(Type.Nullability.REQUIRED);
+            i64Builder.setNullability(Type.Nullability.NULLABILITY_REQUIRED);
         }
 
         Type.Builder builder = Type.newBuilder();

@@ -91,7 +91,7 @@ object TPCHDemo {
 
     import scala.io.Source
 
-    for (i <- 1 to 22) {
+    for (i <- 6 to 6) {
       val queryId = "q%02d.sql".format(i)
       val source = Source.fromFile(new File(queriesPath + queryId), "UTF-8")
       spark.sparkContext.setJobDescription(s"Query ${queryId}")

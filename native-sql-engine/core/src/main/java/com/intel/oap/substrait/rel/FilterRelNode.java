@@ -19,7 +19,7 @@ package com.intel.oap.substrait.rel;
 
 import com.intel.oap.substrait.expression.ExpressionNode;
 import com.intel.oap.substrait.type.TypeNode;
-import io.substrait.*;
+import io.substrait.proto.*;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -44,9 +44,9 @@ public class FilterRelNode implements RelNode, Serializable {
             filterBuilder.setInput(input.toProtobuf());
         }
         filterBuilder.setCondition(condition.toProtobuf());
-        for (TypeNode type : types) {
+        /*for (TypeNode type : types) {
             filterBuilder.addInputTypes(type.toProtobuf());
-        }
+        }*/
         Rel.Builder builder = Rel.newBuilder();
         builder.setFilter(filterBuilder.build());
         return builder.build();
