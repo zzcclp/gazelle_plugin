@@ -30,6 +30,8 @@ object ChAsLibDemo {
       .builder()
       .master("local[1]")
       .appName("CH-As-Lib-Demo")
+      .config("spark.driver.memory", "4G")
+      .config("spark.driver.memoryOverhead", "6G")
       //.config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.serializer", "org.apache.spark.serializer.JavaSerializer")
       //.config("spark.sql.warehouse.dir", warehouse)
@@ -51,19 +53,19 @@ object ChAsLibDemo {
       .config("spark.sql.sources.useV1SourceList", "avro")
       .config("spark.memory.fraction", "0.3")
       .config("spark.memory.storageFraction", "0.3")
-      .config("spark.plugins", "com.intel.oap.GazellePlugin")
       .config("spark.sql.parquet.columnarReaderBatchSize", "20000")
+      .config("spark.plugins", "com.intel.oap.GazellePlugin")
       .config("spark.sql.execution.arrow.maxRecordsPerBatch", "20000")
+      .config("spark.oap.sql.columnar.columnartorow", "false")
       .config("spark.sql.planChangeLog.level", "info")
       .config("spark.memory.offHeap.enabled", "true")
       .config("spark.memory.offHeap.size", "6442450944")
-      .config("spark.oap.sql.columnar.columnartorow", "false")
       //.config("javax.jdo.option.ConnectionURL", s"jdbc:derby:;databaseName=$hiveMetaStoreDB;" +
       //  s"create=true")
       //.enableHiveSupport()
 
     val spark = sessionBuilder.getOrCreate()
-    spark.sparkContext.setLogLevel("WARN")
+    spark.sparkContext.setLogLevel("INFO")
 
     testTableScan(spark)
     testTableScan1(spark)
@@ -75,12 +77,10 @@ object ChAsLibDemo {
   }
 
   def testTableScan(spark: SparkSession): Unit = {
-    // /home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/utils/local-engine/tests/data/iris.parquet
-    // /data1/test_output/intel-gazelle-test.snappy.parquet
-
-    val testDF = spark.read.format("arrow").load("/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/utils/local-engine/tests/data/iris.parquet")
+    val testDF = spark.read.format("arrow")
+      .load("/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/utils/local-engine/tests/data/iris.parquet")
     testDF.createOrReplaceTempView("chlib")
-    val cnt = 1
+    val cnt = 5
     var minTime = Long.MaxValue
     for (i <- 1 to cnt) {
       val startTime = System.nanoTime()
@@ -96,13 +96,10 @@ object ChAsLibDemo {
   }
 
   def testTableScan1(spark: SparkSession): Unit = {
-    // /home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/utils/local-engine/tests/data/iris.parquet
-    // /data1/test_output/intel-gazelle-test.snappy.parquet
-
     val testDF = spark.read.format("arrow").load("/data1/test_output/intel-gazelle-test.snappy.parquet")
     testDF.printSchema()
     testDF.createOrReplaceTempView("gazelle_intel")
-    val cnt = 1
+    val cnt = 5
     var minTime = Long.MaxValue
     for (i <- 1 to cnt) {
       val startTime = System.nanoTime()

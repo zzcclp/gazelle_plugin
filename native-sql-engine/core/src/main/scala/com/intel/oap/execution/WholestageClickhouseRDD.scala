@@ -103,7 +103,10 @@ class WholestageClickhouseRDD(
         throw new UnsupportedOperationException(s"$other is not supported yet.")
     }
 
+    var startTime = System.nanoTime()
     val wsCtx = doWholestageTransform(index, paths, starts, lengths)
+    logWarning(s"===========1 ${System.nanoTime() - startTime}")
+    startTime = System.nanoTime()
     // val transKernel = new ExpressionEvaluator(jarList.toList.asJava)
     val inBatchIter: ColumnarNativeIterator = null
     val inputSchema = ConverterUtils.toArrowSchema(wsCtx.inputAttributes)
@@ -113,13 +116,18 @@ class WholestageClickhouseRDD(
       inputSchema, wsCtx.root, outputSchema,
       Lists.newArrayList(), inBatchIter,
       dependentKernelIterators.toArray, true) */
+
     val resIter = new CHBatchIterator(wsCtx.root.toProtobuf.toByteArray)
+    logWarning(s"===========2 ${System.nanoTime() - startTime}")
 
     val iter = new Iterator[Any] {
       private val inputMetrics = TaskContext.get().taskMetrics().inputMetrics
 
       override def hasNext: Boolean = {
-        resIter.hasNext
+        val startTime = System.nanoTime()
+        val hasNextRes = resIter.hasNext
+        logWarning(s"===========3 ${System.nanoTime() - startTime}")
+        hasNextRes
       }
 
       override def next(): Any = {
@@ -138,7 +146,9 @@ class WholestageClickhouseRDD(
         //ConverterUtils.releaseArrowRecordBatch(rb)
         val output = ArrowWritableColumnVector.loadColumns(rb.getRowCount, rb.getFieldVectors) */
         // val cb = new ColumnarBatch(output.map(v => v.asInstanceOf[ColumnVector]), outputNumRows)
+        val startTime = System.nanoTime()
         val cb = resIter.next1()
+        logWarning(s"===========4 ${System.nanoTime() - startTime}")
         val bytes: Long = cb match {
           case batch: ColumnarBatch =>
             (0 until batch.numCols()).map { i =>
