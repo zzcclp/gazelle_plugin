@@ -89,7 +89,7 @@ case class HashAggregateExecTransformer(
 
   override def doValidate(): Boolean = {
     val childOpt = this.find(child => {
-      child.isInstanceOf[ShuffleExchangeExec]
+      child.isInstanceOf[ShuffleExchangeExec] || child.isInstanceOf[HashAggregateExec]
     })
     !childOpt.isDefined
   }

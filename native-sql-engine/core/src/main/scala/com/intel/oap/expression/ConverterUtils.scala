@@ -390,6 +390,8 @@ object ConverterUtils extends Logging {
         TypeBuiler.makeI64(name, nullable)
       case IntegerType =>
         TypeBuiler.makeI32(name, nullable)
+      case DateType =>
+        TypeBuiler.makeDate(name, nullable)
       case unknown =>
         throw new UnsupportedOperationException(s"Type $unknown not supported")
     }

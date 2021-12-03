@@ -44,7 +44,7 @@ object ChAsLibDemo {
       .config("spark.sql.files.maxPartitionBytes", 256 << 10 << 10)  // default is 128M
       .config("spark.sql.files.minPartitionNum", "1")
       .config("spark.sql.parquet.filterPushdown", "true")
-      //.config("spark.locality.wait", "0s")
+      .config("spark.locality.wait", "0s")
       //.config("spark.sql.sources.ignoreDataLocality", "false")
       .config("spark.sql.parquet.enableVectorizedReader", "true")
       //.config("spark.hadoop.parquet.block.size", "8388608")
@@ -57,6 +57,7 @@ object ChAsLibDemo {
       .config("spark.plugins", "com.intel.oap.GazellePlugin")
       .config("spark.sql.execution.arrow.maxRecordsPerBatch", "20000")
       .config("spark.oap.sql.columnar.columnartorow", "false")
+      .config("spark.oap.sql.columnar.use.emptyiter", "true")
       .config("spark.sql.planChangeLog.level", "info")
       .config("spark.memory.offHeap.enabled", "true")
       .config("spark.memory.offHeap.size", "6442450944")
@@ -65,10 +66,12 @@ object ChAsLibDemo {
       //.enableHiveSupport()
 
     val spark = sessionBuilder.getOrCreate()
-    spark.sparkContext.setLogLevel("INFO")
+    spark.sparkContext.setLogLevel("WARN")
 
-    testTableScan(spark)
-    testTableScan1(spark)
+    // testTableScan(spark)
+    // testTableScan1(spark)
+    // testIntelQ6(spark)
+    testQ6(spark)
 
     System.out.println("waiting for finishing")
     Thread.sleep(1800000)
@@ -80,7 +83,7 @@ object ChAsLibDemo {
     val testDF = spark.read.format("arrow")
       .load("/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/utils/local-engine/tests/data/iris.parquet")
     testDF.createOrReplaceTempView("chlib")
-    val cnt = 5
+    val cnt = 1
     var minTime = Long.MaxValue
     for (i <- 1 to cnt) {
       val startTime = System.nanoTime()
@@ -99,7 +102,7 @@ object ChAsLibDemo {
     val testDF = spark.read.format("arrow").load("/data1/test_output/intel-gazelle-test.snappy.parquet")
     testDF.printSchema()
     testDF.createOrReplaceTempView("gazelle_intel")
-    val cnt = 5
+    val cnt = 1
     var minTime = Long.MaxValue
     for (i <- 1 to cnt) {
       val startTime = System.nanoTime()
@@ -112,6 +115,72 @@ object ChAsLibDemo {
       }
     }
     println("min time" + minTime)
+
+  }
+
+  def testIntelQ6(spark: SparkSession): Unit = {
+    val testDF = spark.read.format("arrow").load("/data1/test_output/intel-gazelle-test.snappy.parquet")
+    testDF.createOrReplaceTempView("lineitem")
+    val cnt = 1
+    var minTime = Long.MaxValue
+    for (i <- 1 to cnt) {
+      val startTime = System.nanoTime()
+      spark.sql(
+        """
+          | select sum(l_extendedprice*l_discount) as revenue
+          | from lineitem
+          | where l_shipdate_new >= 8766 and l_shipdate_new < 9131
+          | and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24
+          |""".stripMargin).show(200, false)
+      val tookTime = System.nanoTime() - startTime
+      println(tookTime)
+      if (minTime > tookTime) {
+        minTime = tookTime
+      }
+    }
+    println("min time" + minTime)
+
+  }
+
+  def createTempView(spark: SparkSession, currentPath: String): Unit = {
+    val parquetFilesPath = new File(currentPath + "../../../../../tpch-data")
+      .getAbsolutePath
+    val dataSourceMap = Map(
+      "customer" -> spark.read.format("arrow").load(parquetFilesPath + "/customer"),
+
+      "lineitem" -> spark.read.format("arrow").load(parquetFilesPath + "/lineitem"),
+
+      "nation" -> spark.read.format("arrow").load(parquetFilesPath + "/nation"),
+
+      "region" -> spark.read.format("arrow").load(parquetFilesPath + "/region"),
+
+      "orders" -> spark.read.format("arrow").load(parquetFilesPath + "/order"),
+
+      "part" -> spark.read.format("arrow").load(parquetFilesPath + "/part"),
+
+      "partsupp" -> spark.read.format("arrow").load(parquetFilesPath + "/partsupp"),
+
+      "supplier" -> spark.read.format("arrow").load(parquetFilesPath + "/supplier"))
+
+    dataSourceMap.foreach {
+      case (key, value) => value.createOrReplaceTempView(key)
+    }
+    spark.sql(
+      """
+        | show tables;
+        |""".stripMargin).show(200, false)
+  }
+
+  def testQ6(spark: SparkSession): Unit = {
+    val currentPath = this.getClass.getResource("/").getPath
+    val queriesPath = currentPath + "queries/"
+    createTempView(spark, currentPath)
+
+    import scala.io.Source
+    val queryId = "q%02d.sql".format(6)
+    val source = Source.fromFile(new File(queriesPath + queryId), "UTF-8")
+    spark.sparkContext.setJobDescription(s"Query ${queryId}")
+    spark.sql(source.mkString).show(10000, false)
 
   }
 }

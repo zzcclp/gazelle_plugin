@@ -28,8 +28,12 @@ import java.util.ArrayList;
 public class ExpressionBuilder {
     private ExpressionBuilder() {}
 
-    public static DoubleLiteralNode makeLiteral(Double doubleConstant) {
+    public static DoubleLiteralNode makeDoubleLiteral(Double doubleConstant) {
         return new DoubleLiteralNode(doubleConstant);
+    }
+
+    public static DateLiteralNode makeDateLiteral(Integer intConstant) {
+        return new DateLiteralNode(intConstant);
     }
 
     public static ScalarFunctionNode makeScalarFunction(

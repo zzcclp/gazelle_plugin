@@ -39,7 +39,7 @@ import java.io.Serializable;
 import java.nio.channels.Channel;
 import java.nio.channels.Channels;
 
-public class CHBatchIterator implements AutoCloseable, Serializable {
+public class CHBatchIterator implements BasicBatchIterator {
 
   private LocalEngine localEngine;
   private boolean closed = false;
@@ -53,11 +53,12 @@ public class CHBatchIterator implements AutoCloseable, Serializable {
     this.localEngine.execute();
   }
 
+  @Override
   public boolean hasNext() throws IOException {
     return this.localEngine.hasNext();
   }
 
-  public ArrowRecordBatch next() throws IOException {
+  public ArrowRecordBatch next1() throws IOException {
     BufferAllocator allocator = SparkMemoryUtils.contextAllocator();
     if (this.localEngine == null) {
       return null;
@@ -74,7 +75,8 @@ public class CHBatchIterator implements AutoCloseable, Serializable {
             serializedRecordBatch);
   }
 
-  public ColumnarBatch next1() throws IOException {
+  @Override
+  public ColumnarBatch next() throws IOException {
     BufferAllocator allocator = SparkMemoryUtils.contextAllocator();
     if (this.localEngine == null) {
       return null;

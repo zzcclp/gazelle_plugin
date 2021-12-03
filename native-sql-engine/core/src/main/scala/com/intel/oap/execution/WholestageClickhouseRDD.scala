@@ -29,7 +29,7 @@ import org.apache.spark._
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory}
-import org.apache.spark.sql.execution.arrow.CHBatchIterator
+import org.apache.spark.sql.execution.arrow.{CHBatchIterator, EmptyBatchIterator}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.datasources.FilePartition
 import org.apache.spark.sql.util.OASPackageBridge._
@@ -117,7 +117,12 @@ class WholestageClickhouseRDD(
       Lists.newArrayList(), inBatchIter,
       dependentKernelIterators.toArray, true) */
 
-    val resIter = new CHBatchIterator(wsCtx.root.toProtobuf.toByteArray)
+    logWarning(s"Substrait Plan:\n${wsCtx.root.toProtobuf.toString}")
+    val resIter = if (context.getLocalProperty("spark.oap.sql.columnar.use.emptyiter").toBoolean) {
+      new EmptyBatchIterator()
+    } else {
+      new CHBatchIterator(wsCtx.root.toProtobuf.toByteArray)
+    }
     logWarning(s"===========2 ${System.nanoTime() - startTime}")
 
     val iter = new Iterator[Any] {
@@ -147,7 +152,7 @@ class WholestageClickhouseRDD(
         val output = ArrowWritableColumnVector.loadColumns(rb.getRowCount, rb.getFieldVectors) */
         // val cb = new ColumnarBatch(output.map(v => v.asInstanceOf[ColumnVector]), outputNumRows)
         val startTime = System.nanoTime()
-        val cb = resIter.next1()
+        val cb = resIter.next()
         logWarning(s"===========4 ${System.nanoTime() - startTime}")
         val bytes: Long = cb match {
           case batch: ColumnarBatch =>
