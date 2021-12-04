@@ -121,7 +121,7 @@ class WholestageClickhouseRDD(
     val resIter = if (context.getLocalProperty("spark.oap.sql.columnar.use.emptyiter").toBoolean) {
       new EmptyBatchIterator()
     } else {
-      new CHBatchIterator(wsCtx.root.toProtobuf.toByteArray)
+      new CHBatchIterator(wsCtx.root.toProtobuf.toByteArray, context.getLocalProperty("spark.oap.sql.columnar.ch.so.filepath"))
     }
     logWarning(s"===========2 ${System.nanoTime() - startTime}")
 
