@@ -21,22 +21,21 @@ import scala.collection.mutable.ListBuffer
 
 import com.google.common.collect.Lists
 import com.intel.oap.GazellePluginConfig
-import com.intel.oap.expression.ConverterUtils
 import com.intel.oap.substrait.extensions.{MappingBuilder, MappingNode}
 import com.intel.oap.substrait.plan.PlanBuilder
 import com.intel.oap.vectorized._
 import org.apache.spark._
 
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.UnsafeRow
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReaderFactory}
 import org.apache.spark.sql.execution.arrow.{CHBatchIterator, EmptyBatchIterator}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.datasources.FilePartition
-import org.apache.spark.sql.util.OASPackageBridge._
-import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.util._
 
-class WholestageClickhouseRDD(
+class WholestageClickhouseRowRDD(
     sc: SparkContext,
     @transient private val inputPartitions: Seq[InputPartition],
     partitionReaderFactory: PartitionReaderFactory,
@@ -45,7 +44,7 @@ class WholestageClickhouseRDD(
     jarList: Seq[String],
     dependentKernelIterators: ListBuffer[BatchIterator],
     tmp_dir: String)
-    extends RDD[ColumnarBatch](sc, Nil) {
+    extends RDD[InternalRow](sc, Nil) {
   val numaBindingInfo = GazellePluginConfig.getConf.numaBindingInfo
 
   override protected def getPartitions: Array[Partition] = {
@@ -84,7 +83,7 @@ class WholestageClickhouseRDD(
       childCtx.outputAttributes, planNode)
   }
 
-  override def compute(split: Partition, context: TaskContext): Iterator[ColumnarBatch] = {
+  override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
     ExecutorManager.tryTaskSet(numaBindingInfo)
 
     var index: java.lang.Integer = null
@@ -107,73 +106,77 @@ class WholestageClickhouseRDD(
     val wsCtx = doWholestageTransform(index, paths, starts, lengths)
     logWarning(s"===========1 ${System.nanoTime() - startTime}")
     startTime = System.nanoTime()
-    // val transKernel = new ExpressionEvaluator(jarList.toList.asJava)
-    val inBatchIter: ColumnarNativeIterator = null
-    val inputSchema = ConverterUtils.toArrowSchema(wsCtx.inputAttributes)
-    val outputSchema = ConverterUtils.toArrowSchema(wsCtx.outputAttributes)
-    // FIXME: the 4th. and 5th. parameters are not needed for this case
-    /* val resIter = transKernel.createKernelWithIterator(
-      inputSchema, wsCtx.root, outputSchema,
-      Lists.newArrayList(), inBatchIter,
-      dependentKernelIterators.toArray, true) */
 
     logWarning(s"Substrait Plan:\n${wsCtx.root.toProtobuf.toString}")
     val resIter = if (context.getLocalProperty("spark.oap.sql.columnar.use.emptyiter").toBoolean) {
       new EmptyBatchIterator()
     } else {
-      new CHBatchIterator(wsCtx.root.toProtobuf.toByteArray)
+      new CHBatchIterator(wsCtx.root.toProtobuf.toByteArray, context.getLocalProperty("spark.oap.sql.columnar.ch.so.filepath"))
     }
     logWarning(s"===========2 ${System.nanoTime() - startTime}")
 
-    val iter = new Iterator[Any] {
+    val iter = new Iterator[InternalRow] with AutoCloseable {
       private val inputMetrics = TaskContext.get().taskMetrics().inputMetrics
+      private val numFields = wsCtx.outputAttributes.length
+      private[this] var currentIterator: Iterator[InternalRow] = null
 
       override def hasNext: Boolean = {
         val startTime = System.nanoTime()
-        val hasNextRes = resIter.hasNext
+        val hasNextRes = (currentIterator != null && currentIterator.hasNext) || nextIterator()
         logWarning(s"===========3 ${System.nanoTime() - startTime}")
         hasNextRes
       }
 
-      override def next(): Any = {
+      private def nextIterator(): Boolean = {
+        if (resIter.hasNext) {
+          val sparkRowInfo = resIter.next()
+          val result = if (sparkRowInfo.offsets != null && sparkRowInfo.offsets.length > 0) {
+            val numRows = sparkRowInfo.offsets.length
+            currentIterator = new Iterator[InternalRow] with AutoCloseable {
+
+              var rowId = 0
+              val row = new UnsafeRow(numFields)
+
+              override def hasNext: Boolean = {
+                rowId < numRows
+              }
+
+              override def next(): InternalRow = {
+                if (rowId >= numRows) throw new NoSuchElementException
+                val (offset, length) = (sparkRowInfo.offsets(rowId), sparkRowInfo.lengths(rowId))
+                row.pointTo(null, sparkRowInfo.memoryAddress + offset, length.toInt)
+                rowId += 1
+                println(row)
+                row
+              }
+
+              override def close(): Unit = {}
+            }
+            true
+          } else {
+            false
+          }
+          result
+        } else {
+          false
+        }
+      }
+
+      override def next(): InternalRow = {
         if (!hasNext) {
           throw new java.util.NoSuchElementException("End of stream")
         }
-        /* val output = resIter.next1()
-        if (rb == null) {
-          val resultStructType = ArrowUtils.fromArrowSchema(outputSchema)
-          val resultColumnVectors =
-            ArrowWritableColumnVector.allocateColumns(0, resultStructType).toArray
-          return new ColumnarBatch(resultColumnVectors.map(_.asInstanceOf[ColumnVector]), 0)
-        }
-        val outputNumRows = rb.getRowCount
-        //val output = ConverterUtils.fromArrowRecordBatch(outputSchema, rb, allocator)
-        //ConverterUtils.releaseArrowRecordBatch(rb)
-        val output = ArrowWritableColumnVector.loadColumns(rb.getRowCount, rb.getFieldVectors) */
-        // val cb = new ColumnarBatch(output.map(v => v.asInstanceOf[ColumnVector]), outputNumRows)
         val startTime = System.nanoTime()
-        val cb = null // resIter.next()
+        val cb = currentIterator.next()
         logWarning(s"===========4 ${System.nanoTime() - startTime}")
-        /*val bytes: Long = cb match {
-          case batch: ColumnarBatch =>
-            (0 until batch.numCols()).map { i =>
-              val vector = Option(batch.column(i))
-              vector.map {
-                case av: ArrowWritableColumnVector =>
-                  av.getValueVector.getBufferSize.toLong
-                case _ => 0L
-              }.sum
-            }.sum
-          case _ => 0L
-        }
-        inputMetrics.bridgeIncBytesRead(bytes)*/
         cb
       }
+
+      override def close(): Unit = {
+        resIter.close()
+      }
     }
-    val closeableColumnarBatchIterator = new CloseableColumnBatchIterator(
-      iter.asInstanceOf[Iterator[ColumnarBatch]])
-    // TODO: SPARK-25083 remove the type erasure hack in data source scan
-    new InterruptibleIterator(context, closeableColumnarBatchIterator)
+    iter
   }
 
   override def getPreferredLocations(split: Partition): Seq[String] = {

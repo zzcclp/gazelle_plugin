@@ -17,10 +17,10 @@
 
 package org.apache.spark.sql.execution.arrow;
 
+import io.kyligence.jni.engine.SparkRowInfo;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 
 import java.io.IOException;
-import java.io.Serializable;
 
 public class EmptyBatchIterator implements BasicBatchIterator {
 
@@ -37,7 +37,12 @@ public class EmptyBatchIterator implements BasicBatchIterator {
   }
 
   @Override
-  public ColumnarBatch next() throws IOException {
+  public ColumnarBatch next1() throws IOException {
+    return null;
+  }
+
+  @Override
+  public SparkRowInfo next() throws IOException {
     return null;
   }
 

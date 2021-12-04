@@ -52,7 +52,7 @@ case class HashAggregateExecTransformer(
 
   val sparkConf = sparkContext.getConf
 
-  override def supportsColumnar: Boolean = true
+  override def supportsColumnar: Boolean = false
 
   val resAttributes: Seq[Attribute] = resultExpressions.map(_.toAttribute)
 

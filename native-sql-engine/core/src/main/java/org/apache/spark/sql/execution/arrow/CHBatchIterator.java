@@ -20,24 +20,18 @@ package org.apache.spark.sql.execution.arrow;
 import com.intel.oap.ch.jni.CHJniInstance;
 import com.intel.oap.vectorized.ArrowWritableColumnVector;
 import io.kyligence.jni.engine.LocalEngine;
+import io.kyligence.jni.engine.SparkRowInfo;
 import org.apache.arrow.dataset.jni.UnsafeRecordBatchSerializer;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.VectorUnloader;
 import org.apache.arrow.vector.ipc.ArrowFileReader;
-import org.apache.arrow.vector.ipc.ReadChannel;
 import org.apache.arrow.vector.ipc.message.ArrowBlock;
 import org.apache.arrow.vector.ipc.message.ArrowRecordBatch;
-import org.apache.arrow.vector.ipc.message.MessageSerializer;
 import org.apache.arrow.vector.util.ByteArrayReadableSeekableByteChannel;
 import org.apache.spark.sql.execution.datasources.v2.arrow.SparkMemoryUtils;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.Serializable;
-import java.nio.channels.Channel;
-import java.nio.channels.Channels;
 
 public class CHBatchIterator implements BasicBatchIterator {
 
@@ -46,9 +40,9 @@ public class CHBatchIterator implements BasicBatchIterator {
 
   public CHBatchIterator() throws IOException {}
 
-  public CHBatchIterator(byte[] plan) throws IOException {
+  public CHBatchIterator(byte[] plan, String soFilePath) throws IOException {
     this.localEngine = CHJniInstance
-      .getInstance("/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/cmake-build-debug/utils/local-engine/liblocal_engine_jnid.so")
+      .getInstance(soFilePath)
             .buildLocalEngine(plan);
     this.localEngine.execute();
   }
@@ -58,13 +52,21 @@ public class CHBatchIterator implements BasicBatchIterator {
     return this.localEngine.hasNext();
   }
 
-  public ArrowRecordBatch next1() throws IOException {
+  @Override
+  public SparkRowInfo next() throws IOException {
+    if (this.localEngine == null) {
+      return null;
+    }
+    return this.localEngine.next();
+  }
+
+  public ArrowRecordBatch next2() throws IOException {
     BufferAllocator allocator = SparkMemoryUtils.contextAllocator();
     if (this.localEngine == null) {
       return null;
     }
     // return the arrow 'WriteRecordBatchMessage' data
-    byte[] serializedRecordBatch = this.localEngine.next();
+    byte[] serializedRecordBatch = null; //this.localEngine.next();
     if (serializedRecordBatch == null) {
       return null;
     }
@@ -75,14 +77,13 @@ public class CHBatchIterator implements BasicBatchIterator {
             serializedRecordBatch);
   }
 
-  @Override
-  public ColumnarBatch next() throws IOException {
+  public ColumnarBatch next1() throws IOException {
     BufferAllocator allocator = SparkMemoryUtils.contextAllocator();
     if (this.localEngine == null) {
       return null;
     }
     // return the arrow 'ArrowTable' data
-    byte[] serializedRecordBatch = this.localEngine.next();
+    byte[] serializedRecordBatch = null; //this.localEngine.next();
     if (serializedRecordBatch == null) {
       return null;
     }

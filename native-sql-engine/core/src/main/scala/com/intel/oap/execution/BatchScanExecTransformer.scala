@@ -36,7 +36,7 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
     extends BatchScanExec(output, scan) with TransformSupport {
   val tmpDir: String = GazellePluginConfig.getConf.tmpFile
   val filterExprs: Seq[Expression] = scan.asInstanceOf[ArrowScan].dataFilters
-  override def supportsColumnar(): Boolean = true
+  override def supportsColumnar(): Boolean = false
   override lazy val metrics = Map(
     "numOutputRows" -> SQLMetrics.createMetric(sparkContext, "number of output rows"),
     "numInputBatches" -> SQLMetrics.createMetric(sparkContext, "input_batches"),

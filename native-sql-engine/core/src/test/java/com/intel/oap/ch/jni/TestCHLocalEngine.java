@@ -1,6 +1,7 @@
 package com.intel.oap.ch.jni;
 
 import io.kyligence.jni.engine.LocalEngine;
+import io.kyligence.jni.engine.SparkRowInfo;
 import org.apache.commons.io.IOUtils;
 import org.junit.Assert;
 import org.junit.Before;
@@ -24,7 +25,8 @@ public class TestCHLocalEngine {
         LocalEngine localEngine = new LocalEngine(plan.getBytes(StandardCharsets.UTF_8));
         localEngine.execute();
         Assert.assertTrue(localEngine.hasNext());
-        byte[] data = localEngine.next();
-        Assert.assertEquals(7106, data.length);
+        SparkRowInfo data = localEngine.next();
+        Assert.assertTrue(data.memoryAddress > 0);
+        Assert.assertEquals(150, data.offsets.length);
     }
 }

@@ -101,7 +101,7 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
 
   override def outputOrdering: Seq[SortOrder] = child.outputOrdering
 
-  override def supportsColumnar: Boolean = true
+  override def supportsColumnar: Boolean = false
 
   override def otherCopyArgs: Seq[AnyRef] = Seq(transformStageId.asInstanceOf[Integer])
   override def generateTreeString(
@@ -284,8 +284,48 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
       throw new UnsupportedOperationException
   }
   override def doExecute(): RDD[InternalRow] = {
-    throw new UnsupportedOperationException
+    val signature = doBuild()
+    val listJars = uploadAndListJars(signature)
+    val dependentKernelIterators: ListBuffer[BatchIterator] = ListBuffer()
+    val numOutputBatches = child.longMetric("numOutputBatches")
+    val pipelineTime = longMetric("pipelineTime")
+
+    // check if BatchScan exists
+    var current_op = child
+    while (current_op.isInstanceOf[TransformSupport] &&
+      !current_op.isInstanceOf[BatchScanExecTransformer] &&
+      current_op.asInstanceOf[TransformSupport].getChild != null) {
+      current_op = current_op.asInstanceOf[TransformSupport].getChild
+    }
+    val contains_batchscan = if (current_op != null &&
+      current_op.isInstanceOf[BatchScanExecTransformer]) {
+      true
+    } else {
+      false
+    }
+    if (contains_batchscan) {
+      // If containing batchscan, a new RDD is created.
+      val execTempDir = GazellePluginConfig.getTempFile
+      val jarList = listJars.map(jarUrl => {
+        logWarning(s"Get Codegened library Jar ${jarUrl}")
+        UserAddedJarUtils.fetchJarFromSpark(
+          jarUrl,
+          execTempDir,
+          s"spark-columnar-plugin-codegen-precompile-${signature}.jar",
+          sparkConf)
+        s"${execTempDir}/spark-columnar-plugin-codegen-precompile-${signature}.jar"
+      })
+      val batchScan = current_op.asInstanceOf[BatchScanExecTransformer]
+      val wsRDD = new WholestageClickhouseRowRDD(
+        sparkContext, batchScan.partitions, batchScan.readerFactory,
+        true, child, jarList, dependentKernelIterators,
+        execTempDir)
+      wsRDD
+    } else {
+      sparkContext.emptyRDD
+    }
   }
+
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
     val signature = doBuild()
     val listJars = uploadAndListJars(signature)

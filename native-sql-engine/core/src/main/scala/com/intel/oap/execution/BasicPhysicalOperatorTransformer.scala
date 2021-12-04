@@ -17,28 +17,21 @@
 
 package com.intel.oap.execution
 
-import com.intel.oap.GazellePluginConfig
 import com.intel.oap.expression._
-import com.intel.oap.vectorized._
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.expressions.codegen._
-import org.apache.spark.internal.Logging
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.execution._
-import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
-import org.apache.spark.sql.types.{DecimalType, StructType}
-import org.apache.spark.util.ExecutorManager
-import org.apache.spark.sql.util.StructTypeFWD
-import org.apache.spark.{SparkConf, TaskContext}
-import org.apache.arrow.gandiva.expression._
-import org.apache.arrow.vector.types.pojo.ArrowType
-import com.google.common.collect.Lists
-import com.intel.oap.GazellePluginConfig
 import com.intel.oap.substrait.expression.ExpressionNode
 import com.intel.oap.substrait.rel.{RelBuilder, RelNode}
-import org.apache.spark.sql.execution.datasources.v2.arrow.SparkMemoryUtils;
+import com.intel.oap.vectorized._
+import org.apache.arrow.gandiva.expression._
+import org.apache.spark.SparkConf
+
+import org.apache.spark.internal.Logging
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.expressions.codegen._
+import org.apache.spark.sql.execution._
+import org.apache.spark.sql.execution.metric.SQLMetrics
+import org.apache.spark.sql.util.StructTypeFWD
+import org.apache.spark.sql.vectorized.ColumnarBatch;
 
 case class ConditionProjectExecTransformer(
     condition: Expression,
@@ -52,7 +45,7 @@ case class ConditionProjectExecTransformer(
 
   val sparkConf: SparkConf = sparkContext.getConf
 
-  override def supportsColumnar: Boolean = true
+  override def supportsColumnar: Boolean = false
 
   override lazy val metrics = Map(
     "numOutputRows" -> SQLMetrics.createMetric(sparkContext, "number of output rows"),

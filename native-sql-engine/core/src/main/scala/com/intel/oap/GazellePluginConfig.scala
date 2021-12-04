@@ -17,7 +17,6 @@
 
 package com.intel.oap
 
-import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.internal.SQLConf
 
@@ -73,6 +72,9 @@ class GazellePluginConfig(conf: SQLConf) extends Logging {
 
   val enableArrowColumnarToRow: Boolean =
     conf.getConfString("spark.oap.sql.columnar.columnartorow", "true").toBoolean && enableCpu
+
+  val enableSparkColumnarToRow: Boolean =
+    conf.getConfString("spark.oap.sql.spark.columnartorow", "false").toBoolean
 
   val forceShuffledHashJoin: Boolean =
     conf.getConfString("spark.oap.sql.columnar.forceshuffledhashjoin", "false").toBoolean &&
