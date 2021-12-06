@@ -27,7 +27,7 @@ case class GazelleNumaBindingInfo(
 
 class GazellePluginConfig(conf: SQLConf) extends Logging {
   def getCpu(): Boolean = {
-    val source = scala.io.Source.fromFile("/proc/cpuinfo")
+    /* val source = scala.io.Source.fromFile("/proc/cpuinfo")
     val lines = try source.mkString finally source.close()
     //TODO(): check CPU flags to enable/disable AVX512
     if (lines.contains("GenuineIntel")) {
@@ -36,7 +36,8 @@ class GazellePluginConfig(conf: SQLConf) extends Logging {
       //System.out.println(actualSchemaRoot.getRowCount());
       logWarning("running on non-intel CPU, disable all columnar operators")
       return false
-    }
+    } */
+    true
   }
 
   // for all operators

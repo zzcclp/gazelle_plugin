@@ -71,7 +71,7 @@ object ChAsLibDemo {
 
     // testTableScan(spark)
     // testTableScan1(spark)
-    testIntelQ6(spark)
+    // testIntelQ6(spark)
     testQ6(spark)
 
     System.out.println("waiting for finishing")
