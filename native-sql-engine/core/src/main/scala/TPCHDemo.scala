@@ -43,6 +43,7 @@ object TPCHDemo {
       .config("spark.memory.storageFraction", "0.3")
       .config("spark.sql.parquet.columnarReaderBatchSize", "20000")
       .config("spark.sql.planChangeLog.level", "info")
+      .config("spark.sql.columnVector.offheap.enabled", "true")
       .config("spark.memory.offHeap.enabled", "true")
       .config("spark.memory.offHeap.size", "6442450944")
 

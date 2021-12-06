@@ -60,6 +60,7 @@ object ChAsLibDemo {
       .config("spark.oap.sql.columnar.use.emptyiter", "true")
       .config("spark.oap.sql.columnar.ch.so.filepath", "/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/cmake-build-debug/utils/local-engine/liblocal_engine_jnid.so")
       .config("spark.sql.planChangeLog.level", "info")
+      .config("spark.sql.columnVector.offheap.enabled", "true")
       .config("spark.memory.offHeap.enabled", "true")
       .config("spark.memory.offHeap.size", "6442450944")
       //.config("javax.jdo.option.ConnectionURL", s"jdbc:derby:;databaseName=$hiveMetaStoreDB;" +
@@ -69,10 +70,10 @@ object ChAsLibDemo {
     val spark = sessionBuilder.getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
 
-    // testTableScan(spark)
-    // testTableScan1(spark)
-    // testIntelQ6(spark)
-    testQ6(spark)
+    //testTableScan(spark)
+    //testTableScan1(spark)
+    testIntelQ6(spark)
+    //testQ6(spark)
 
     System.out.println("waiting for finishing")
     Thread.sleep(1800000)
@@ -88,7 +89,9 @@ object ChAsLibDemo {
     var minTime = Long.MaxValue
     for (i <- 1 to cnt) {
       val startTime = System.nanoTime()
-      spark.sql("select sepal_length, type from chlib").show(2, false)
+      // spark.sql("select sepal_length, type, type_string from chlib").show(2, false)
+      spark.sql("select * from chlib").show(1, false)
+      // println(spark.sql("select * from chlib").take(10).mkString("=="))
       val tookTime = System.nanoTime() - startTime
       println(tookTime)
       if (minTime > tookTime) {
