@@ -28,7 +28,7 @@ object ChAsLibDemo {
 
     val sessionBuilder = SparkSession
       .builder()
-      .master("local[1]")
+      .master("local[3]")
       .appName("CH-As-Lib-Demo")
       .config("spark.driver.memory", "4G")
       .config("spark.driver.memoryOverhead", "6G")
@@ -58,7 +58,10 @@ object ChAsLibDemo {
       .config("spark.sql.execution.arrow.maxRecordsPerBatch", "20000")
       .config("spark.oap.sql.columnar.columnartorow", "false")
       .config("spark.oap.sql.columnar.use.emptyiter", "false")
-      .config("spark.oap.sql.columnar.ch.so.filepath", "/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/cmake-build-debug/utils/local-engine/liblocal_engine_jnid.so")
+      //.config("spark.oap.sql.columnar.ch.so.filepath",
+      //  "/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/cmake-build-debug/utils/local-engine/liblocal_engine_jnid.so")
+      .config("spark.oap.sql.columnar.ch.so.filepath",
+        "/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/cmake-build-release/utils/local-engine/liblocal_engine_jni.so")
       .config("spark.sql.planChangeLog.level", "info")
       .config("spark.sql.columnVector.offheap.enabled", "true")
       .config("spark.memory.offHeap.enabled", "true")
@@ -104,21 +107,27 @@ object ChAsLibDemo {
 
   def testTableScan1(spark: SparkSession): Unit = {
 
-    // val testDF = spark.read.format("parquet")
-    //   .load("/data1/test_output/intel-gazelle-test.snappy.parquet")
+    //val testDF = spark.read.format("parquet")
+    //  .load("/data1/test_output/intel-gazelle-test.snappy.parquet")
 
-    val testDF = spark.read.format("arrow").load("/data1/test_output/intel-gazelle-test.snappy" +
-      ".parquet")
+    val testDF = spark.read.format("arrow")
+      .load("/data1/test_output/intel-gazelle-test.snappy.parquet")
     testDF.printSchema()
     testDF.createOrReplaceTempView("gazelle_intel")
-    val cnt = 2
+    val cnt = 1
     var minTime = Long.MaxValue
     for (i <- 1 to cnt) {
       val startTime = System.nanoTime()
       /* spark.sql("select l_extendedprice, l_discount, l_shipdate_new, l_returnflag from " +
         "gazelle_intel").show(200, false) */
+      // select l_extendedprice, l_discount, l_shipdate_new, l_returnflag
+      // select l_orderkey, l_partkey, l_suppkey, l_linenumber
       println(spark
-        .sql("select l_extendedprice, l_discount, l_shipdate_new, l_returnflag from gazelle_intel")
+        .sql(
+          """
+            | select l_extendedprice, l_discount, l_shipdate_new, l_returnflag
+            | from gazelle_intel
+            |""".stripMargin)
         .take(100).mkString("=="))
       val tookTime = System.nanoTime() - startTime
       println(tookTime)

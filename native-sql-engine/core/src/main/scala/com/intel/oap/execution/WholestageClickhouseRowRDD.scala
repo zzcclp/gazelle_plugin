@@ -121,15 +121,15 @@ class WholestageClickhouseRowRDD(
       private[this] var currentIterator: Iterator[InternalRow] = null
 
       override def hasNext: Boolean = {
-        val startTime = System.nanoTime()
         val hasNextRes = (currentIterator != null && currentIterator.hasNext) || nextIterator()
-        logWarning(s"===========3 ${System.nanoTime() - startTime}")
         hasNextRes
       }
 
       private def nextIterator(): Boolean = {
         if (resIter.hasNext) {
+          val startTime = System.nanoTime()
           val sparkRowInfo = resIter.next()
+          logWarning(s"===========3 ${System.nanoTime() - startTime}")
           val result = if (sparkRowInfo.offsets != null && sparkRowInfo.offsets.length > 0) {
             val numRows = sparkRowInfo.offsets.length
             currentIterator = new Iterator[InternalRow] with AutoCloseable {
@@ -146,7 +146,6 @@ class WholestageClickhouseRowRDD(
                 val (offset, length) = (sparkRowInfo.offsets(rowId), sparkRowInfo.lengths(rowId))
                 row.pointTo(null, sparkRowInfo.memoryAddress + offset, length.toInt)
                 rowId += 1
-                println(row)
                 row
               }
 
@@ -166,9 +165,7 @@ class WholestageClickhouseRowRDD(
         if (!hasNext) {
           throw new java.util.NoSuchElementException("End of stream")
         }
-        val startTime = System.nanoTime()
         val cb = currentIterator.next()
-        logWarning(s"===========4 ${System.nanoTime() - startTime}")
         cb
       }
 
