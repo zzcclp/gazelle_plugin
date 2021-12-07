@@ -57,7 +57,7 @@ object ChAsLibDemo {
       .config("spark.plugins", "com.intel.oap.GazellePlugin")
       .config("spark.sql.execution.arrow.maxRecordsPerBatch", "20000")
       .config("spark.oap.sql.columnar.columnartorow", "false")
-      .config("spark.oap.sql.columnar.use.emptyiter", "true")
+      .config("spark.oap.sql.columnar.use.emptyiter", "false")
       .config("spark.oap.sql.columnar.ch.so.filepath", "/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/cmake-build-debug/utils/local-engine/liblocal_engine_jnid.so")
       .config("spark.sql.planChangeLog.level", "info")
       .config("spark.sql.columnVector.offheap.enabled", "true")
@@ -70,10 +70,10 @@ object ChAsLibDemo {
     val spark = sessionBuilder.getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
 
-    //testTableScan(spark)
-    //testTableScan1(spark)
-    testIntelQ6(spark)
-    //testQ6(spark)
+    // testTableScan(spark)
+    testTableScan1(spark)
+    // testIntelQ6(spark)
+    // testQ6(spark)
 
     System.out.println("waiting for finishing")
     Thread.sleep(1800000)
@@ -104,20 +104,22 @@ object ChAsLibDemo {
 
   def testTableScan1(spark: SparkSession): Unit = {
 
-    /* val parquetDF = spark.read.format("parquet").load("/data1/test_output/intel-gazelle-test" +
-      ".snappy.parquet")
-    parquetDF.show(200, false) */
+    // val testDF = spark.read.format("parquet")
+    //   .load("/data1/test_output/intel-gazelle-test.snappy.parquet")
 
     val testDF = spark.read.format("arrow").load("/data1/test_output/intel-gazelle-test.snappy" +
       ".parquet")
     testDF.printSchema()
     testDF.createOrReplaceTempView("gazelle_intel")
-    val cnt = 1
+    val cnt = 2
     var minTime = Long.MaxValue
     for (i <- 1 to cnt) {
       val startTime = System.nanoTime()
-      spark.sql("select l_extendedprice, l_discount, l_shipdate_new, l_returnflag from gazelle_intel")
-        .show(200, false)
+      /* spark.sql("select l_extendedprice, l_discount, l_shipdate_new, l_returnflag from " +
+        "gazelle_intel").show(200, false) */
+      println(spark
+        .sql("select l_extendedprice, l_discount, l_shipdate_new, l_returnflag from gazelle_intel")
+        .take(100).mkString("=="))
       val tookTime = System.nanoTime() - startTime
       println(tookTime)
       if (minTime > tookTime) {
@@ -135,6 +137,11 @@ object ChAsLibDemo {
     var minTime = Long.MaxValue
     for (i <- 1 to cnt) {
       val startTime = System.nanoTime()
+      spark.sql(
+        """
+          | select *
+          | from gazelle_intel
+          |""".stripMargin).show(200, false)
       spark.sql(
         """
           | select sum(l_extendedprice*l_discount) as revenue
