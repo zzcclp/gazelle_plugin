@@ -28,7 +28,7 @@ object ChAsLibDemo {
 
     val sessionBuilder = SparkSession
       .builder()
-      .master("local[3]")
+      .master("local[1]")
       .appName("CH-As-Lib-Demo")
       .config("spark.driver.memory", "4G")
       .config("spark.driver.memoryOverhead", "6G")
@@ -41,7 +41,7 @@ object ChAsLibDemo {
       //.config("spark.sql.adaptive.coalescePartitions.enabled", "true")
       //.config("spark.sql.adaptive.coalescePartitions.minPartitionNum", "2")
       //.config("spark.sql.adaptive.advisoryPartitionSizeInBytes", "2MB")
-      .config("spark.sql.files.maxPartitionBytes", 256 << 10 << 10)  // default is 128M
+      .config("spark.sql.files.maxPartitionBytes", 1024 << 10 << 10)  // default is 128M
       .config("spark.sql.files.minPartitionNum", "1")
       .config("spark.sql.parquet.filterPushdown", "true")
       .config("spark.locality.wait", "0s")
@@ -108,13 +108,13 @@ object ChAsLibDemo {
   def testTableScan1(spark: SparkSession): Unit = {
 
     //val testDF = spark.read.format("parquet")
-    //  .load("/data1/test_output/intel-gazelle-test.snappy.parquet")
+    //  .load("/data1/test_output/intel-gazelle-test-8m.snappy.parquet")
 
     val testDF = spark.read.format("arrow")
-      .load("/data1/test_output/intel-gazelle-test.snappy.parquet")
+      .load("/data1/test_output/intel-gazelle-test-4m.snappy.parquet")
     testDF.printSchema()
     testDF.createOrReplaceTempView("gazelle_intel")
-    val cnt = 1
+    val cnt = 20
     var minTime = Long.MaxValue
     for (i <- 1 to cnt) {
       val startTime = System.nanoTime()
@@ -122,13 +122,49 @@ object ChAsLibDemo {
         "gazelle_intel").show(200, false) */
       // select l_extendedprice, l_discount, l_shipdate_new, l_returnflag
       // select l_orderkey, l_partkey, l_suppkey, l_linenumber
+      /* println(spark
+        .sql(
+          """
+            | SELECT count(1)
+            | from gazelle_intel
+            | where l_orderkey is null or l_partkey is null or l_suppkey is null
+            | or l_linenumber is null or l_quantity is null
+            | limit 20
+            |""".stripMargin).collect().mkString("==")) */
+      /*println(spark
+        .sql(
+          """
+            | SELECT l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity
+            | from gazelle_intel
+            | order by l_extendedprice
+            | limit 20
+            |""".stripMargin).collect().mkString("=="))*/
+      /* println(spark
+        .sql(
+          """
+            | SELECT l_orderkey, l_partkey, l_suppkey, l_linenumber,
+            | l_quantity, l_extendedprice, l_discount, l_tax, l_shipdate_new,
+            | l_commitdate_new, l_receiptdate_new
+            | from gazelle_intel
+            | order by l_extendedprice
+            | limit 20
+            |""".stripMargin).collect().mkString("==")) */
+      /*println(spark
+        .sql(
+          """
+            | SELECT l_orderkey
+            | from gazelle_intel
+            | order by l_orderkey
+            | limit 2
+            |""".stripMargin).collect().mkString("=="))*/
       println(spark
         .sql(
           """
-            | select l_extendedprice, l_discount, l_shipdate_new, l_returnflag
+            | SELECT *
             | from gazelle_intel
-            |""".stripMargin)
-        .take(100).mkString("=="))
+            | order by l_extendedprice
+            | limit 20
+            |""".stripMargin).collect().mkString("=="))
       val tookTime = System.nanoTime() - startTime
       println(tookTime)
       if (minTime > tookTime) {

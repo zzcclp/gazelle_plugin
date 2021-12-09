@@ -119,6 +119,7 @@ class WholestageClickhouseRowRDD(
       private val inputMetrics = TaskContext.get().taskMetrics().inputMetrics
       private val numFields = wsCtx.outputAttributes.length
       private[this] var currentIterator: Iterator[InternalRow] = null
+      private var totalBatch = 0
 
       override def hasNext: Boolean = {
         val hasNextRes = (currentIterator != null && currentIterator.hasNext) || nextIterator()
@@ -129,6 +130,7 @@ class WholestageClickhouseRowRDD(
         if (resIter.hasNext) {
           val startTime = System.nanoTime()
           val sparkRowInfo = resIter.next()
+          totalBatch += 1
           logWarning(s"===========3 ${System.nanoTime() - startTime}")
           val result = if (sparkRowInfo.offsets != null && sparkRowInfo.offsets.length > 0) {
             val numRows = sparkRowInfo.offsets.length
