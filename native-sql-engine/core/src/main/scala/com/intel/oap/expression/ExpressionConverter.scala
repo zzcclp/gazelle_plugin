@@ -20,7 +20,6 @@ package com.intel.oap.expression
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate._
-import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReferences
 import org.apache.spark.sql.types.DecimalType
 object ExpressionConverter extends Logging {
   def replaceWithExpressionTransformer(

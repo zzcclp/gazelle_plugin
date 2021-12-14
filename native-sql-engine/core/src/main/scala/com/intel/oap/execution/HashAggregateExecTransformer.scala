@@ -211,6 +211,7 @@ case class HashAggregateExecTransformer(
     })
     aggregateExpressions.toList.foreach(aggExpr => {
       val aggregatFunc = aggExpr.aggregateFunction
+      val functionId = AggregateFunctionsBuilder.create(args, aggregatFunc)
       val mode = modeToKeyWord(aggExpr.mode)
       val childrenNodeList = new util.ArrayList[ExpressionNode]()
       aggExpr.mode match {
@@ -229,7 +230,7 @@ case class HashAggregateExecTransformer(
       val outputTypeNode = ConverterUtils.getTypeNode(
         aggregatFunc.dataType, "res", aggregatFunc.nullable)
       val aggFunctionNode = ExpressionBuilder
-        .makeAggregateFunction(childrenNodeList, mode, outputTypeNode)
+        .makeAggregateFunction(functionId, childrenNodeList, mode, outputTypeNode)
       aggregateFunctionList.add(aggFunctionNode)
     })
     // Set Input and Output types

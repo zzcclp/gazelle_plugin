@@ -57,7 +57,7 @@ object ChAsLibDemo {
       .config("spark.plugins", "com.intel.oap.GazellePlugin")
       .config("spark.sql.execution.arrow.maxRecordsPerBatch", "20000")
       .config("spark.oap.sql.columnar.columnartorow", "false")
-      .config("spark.oap.sql.columnar.use.emptyiter", "false")
+      .config("spark.oap.sql.columnar.use.emptyiter", "true")
       //.config("spark.oap.sql.columnar.ch.so.filepath",
       //  "/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/cmake-build-debug/utils/local-engine/liblocal_engine_jnid.so")
       .config("spark.oap.sql.columnar.ch.so.filepath",
@@ -74,9 +74,9 @@ object ChAsLibDemo {
     spark.sparkContext.setLogLevel("WARN")
 
     // testTableScan(spark)
-    testTableScan1(spark)
+    // testTableScan1(spark)
     // testIntelQ6(spark)
-    // testQ6(spark)
+    testQ6(spark)
 
     System.out.println("waiting for finishing")
     Thread.sleep(1800000)
@@ -182,11 +182,11 @@ object ChAsLibDemo {
     var minTime = Long.MaxValue
     for (i <- 1 to cnt) {
       val startTime = System.nanoTime()
-      spark.sql(
+      /*spark.sql(
         """
           | select *
           | from gazelle_intel
-          |""".stripMargin).show(200, false)
+          |""".stripMargin).show(200, false)*/
       spark.sql(
         """
           | select sum(l_extendedprice*l_discount) as revenue
@@ -194,6 +194,15 @@ object ChAsLibDemo {
           | where l_shipdate_new >= 8766 and l_shipdate_new < 9131
           | and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24
           |""".stripMargin).show(200, false)
+      /*spark.sql(
+        """
+          | select sum(l_extendedprice*l_discount) as revenue,
+          | sum(l_extendedprice) as sum1,
+          | sum(l_quantity) as sum2
+          | from gazelle_intel
+          | where l_shipdate_new >= 8766 and l_shipdate_new < 9131
+          | and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24
+          |""".stripMargin).show(200, false)*/
       val tookTime = System.nanoTime() - startTime
       println(tookTime)
       if (minTime > tookTime) {

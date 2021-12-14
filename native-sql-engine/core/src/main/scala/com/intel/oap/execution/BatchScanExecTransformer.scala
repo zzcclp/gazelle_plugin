@@ -17,6 +17,8 @@
 
 package com.intel.oap.execution
 
+import scala.collection.JavaConversions._
+
 import com.intel.oap.GazellePluginConfig
 import com.intel.oap.expression.{ConverterUtils, ExpressionConverter, ExpressionTransformer}
 import com.intel.oap.spark.sql.execution.datasources.v2.arrow.ArrowScan
@@ -92,14 +94,9 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
       nameList.add(attr.name)
     }
     // Will put all filter expressions into an AND expression
-    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
-    val functionName = "AND"
-    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
-    if (!functionMap.containsKey(functionName)) {
-      functionMap.put(functionName, functionId)
-    } else {
-      functionId = functionMap.get(functionName)
-    }
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, java.lang.Long]]
+    val functionId = ExpressionBuilder.newScalarFunction(functionMap, "AND")
+
     val filterNodes = filterExprs.toList.map(expr => {
       val transformer = ExpressionConverter.replaceWithExpressionTransformer(expr, output)
       transformer.asInstanceOf[ExpressionTransformer].doTransform(args)
@@ -126,14 +123,8 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
       nameList.add(attr.name)
     }
     // Will put all filter expressions into an AND expression
-    val functionMap = args.asInstanceOf[java.util.HashMap[String, Long]]
-    val functionName = "AND"
-    var functionId = functionMap.size().asInstanceOf[java.lang.Integer].longValue()
-    if (!functionMap.containsKey(functionName)) {
-      functionMap.put(functionName, functionId)
-    } else {
-      functionId = functionMap.get(functionName)
-    }
+    val functionMap = args.asInstanceOf[java.util.HashMap[String, java.lang.Long]]
+    val functionId = ExpressionBuilder.newScalarFunction(functionMap, "AND")
     val filterNodes = filterExprs.toList.map(expr => {
       val transformer = ExpressionConverter.replaceWithExpressionTransformer(expr, output)
       transformer.asInstanceOf[ExpressionTransformer].doTransform(args)

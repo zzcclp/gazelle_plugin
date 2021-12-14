@@ -17,7 +17,6 @@
 
 package com.intel.oap.substrait.expression;
 
-import com.intel.oap.substrait.expression.ExpressionNode;
 import com.intel.oap.substrait.type.TypeNode;
 import io.substrait.Expression;
 import io.substrait.Extensions;

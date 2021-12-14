@@ -25,7 +25,7 @@ public class SelectionNode implements ExpressionNode, Serializable {
     private final Integer fieldIdx;
 
     SelectionNode(Integer fieldIdx) {
-        this.fieldIdx = fieldIdx;
+        this.fieldIdx = fieldIdx + 1;
     }
 
     @Override

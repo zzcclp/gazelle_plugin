@@ -21,12 +21,23 @@ import com.intel.oap.substrait.type.TypeNode;
 import io.substrait.*;
 
 import java.util.ArrayList;
+import java.util.Map;
 
 /**
  * Contains helper functions for constructing substrait relations.
  */
 public class ExpressionBuilder {
     private ExpressionBuilder() {}
+
+    public static Long newScalarFunction(Map<String, Long> functionMap, String functionName) {
+        if (!functionMap.containsKey(functionName)) {
+            Long functionId = functionMap.size() + 1L;
+            functionMap.put(functionName, functionId);
+            return functionId;
+        } else {
+            return functionMap.get(functionName);
+        }
+    }
 
     public static DoubleLiteralNode makeDoubleLiteral(Double doubleConstant) {
         return new DoubleLiteralNode(doubleConstant);
@@ -46,9 +57,9 @@ public class ExpressionBuilder {
         return new SelectionNode(fieldIdx);
     }
 
-    public static AggregateFunctionNode makeAggregateFunction(
+    public static AggregateFunctionNode makeAggregateFunction(Long functionId,
             ArrayList<ExpressionNode> expressionNodes, String phase, TypeNode outputTypeNode) {
-        return new AggregateFunctionNode(expressionNodes, phase, outputTypeNode);
+        return new AggregateFunctionNode(functionId, expressionNodes, phase, outputTypeNode);
     }
 
     public static AggregateFunctionNode makeAggregateFunction(

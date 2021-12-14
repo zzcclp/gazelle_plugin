@@ -63,7 +63,7 @@ class WholestageClickhouseRowRDD(
                                     starts: java.util.ArrayList[java.lang.Long],
                                     lengths: java.util.ArrayList[java.lang.Long])
     : WholestageTransformContext = {
-    val functionMap = new java.util.HashMap[String, Long]()
+    val functionMap = new java.util.HashMap[String, java.lang.Long]()
     val childCtx = lastPlanInWS.asInstanceOf[TransformSupport]
       .doTransform(functionMap, index, paths, starts, lengths)
     if (childCtx == null) {
