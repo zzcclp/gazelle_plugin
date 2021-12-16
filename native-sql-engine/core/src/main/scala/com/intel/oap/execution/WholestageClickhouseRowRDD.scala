@@ -17,6 +17,8 @@
 
 package com.intel.oap.execution
 
+import java.io.{DataOutputStream, File, FileOutputStream}
+
 import scala.collection.mutable.ListBuffer
 
 import com.google.common.collect.Lists
@@ -108,6 +110,15 @@ class WholestageClickhouseRowRDD(
     startTime = System.nanoTime()
 
     logWarning(s"Substrait Plan:\n${wsCtx.root.toProtobuf.toString}")
+
+    val outputFilePath = "/tmp/SubStraitTest.dat"
+    val target = new File(outputFilePath)
+    if (target.exists) target.delete
+
+    val out = new DataOutputStream(new FileOutputStream(outputFilePath, false))
+    out.write(wsCtx.root.toProtobuf.toByteArray)
+    out.flush()
+
     val resIter = if (context.getLocalProperty("spark.oap.sql.columnar.use.emptyiter").toBoolean) {
       new EmptyBatchIterator()
     } else {
