@@ -32,7 +32,7 @@ public class DateLiteralNode implements ExpressionNode, Serializable {
     public Expression toProtobuf() {
         Expression.Literal.Builder dateBuilder =
                 Expression.Literal.newBuilder();
-        dateBuilder.setI32(value.intValue());
+        dateBuilder.setDate(value);
 
         Expression.Builder builder = Expression.newBuilder();
         builder.setLiteral(dateBuilder.build());

@@ -83,6 +83,7 @@ public class CHJniInstance {
         }
         instance = new CHJniInstance();
         instance.setCurrLibPath(libPath);
+        LocalEngine.initEngineEnv();
         return instance;
     }
 

@@ -57,7 +57,7 @@ object ChAsLibDemo {
       .config("spark.plugins", "com.intel.oap.GazellePlugin")
       .config("spark.sql.execution.arrow.maxRecordsPerBatch", "20000")
       .config("spark.oap.sql.columnar.columnartorow", "false")
-      .config("spark.oap.sql.columnar.use.emptyiter", "true")
+      .config("spark.oap.sql.columnar.use.emptyiter", "false")
       //.config("spark.oap.sql.columnar.ch.so.filepath",
       //  "/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/cmake-build-debug/utils/local-engine/liblocal_engine_jnid.so")
       .config("spark.oap.sql.columnar.ch.so.filepath",
@@ -75,8 +75,8 @@ object ChAsLibDemo {
 
     // testTableScan(spark)
     // testTableScan1(spark)
-    // testIntelQ6(spark)
-    testQ6(spark)
+    testIntelQ6(spark)
+    // testQ6(spark)
 
     System.out.println("waiting for finishing")
     Thread.sleep(1800000)
@@ -176,9 +176,10 @@ object ChAsLibDemo {
   }
 
   def testIntelQ6(spark: SparkSession): Unit = {
-    val testDF = spark.read.format("arrow").load("/data1/test_output/intel-gazelle-test.snappy.parquet")
+    val testDF = spark.read.format("arrow")
+      .load("/data1/test_output/intel-gazelle-test-512K-sorted.snappy.parquet")
     testDF.createOrReplaceTempView("gazelle_intel")
-    val cnt = 1
+    val cnt = 20
     var minTime = Long.MaxValue
     for (i <- 1 to cnt) {
       val startTime = System.nanoTime()
