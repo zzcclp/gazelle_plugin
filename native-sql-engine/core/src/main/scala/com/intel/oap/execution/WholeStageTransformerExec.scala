@@ -352,7 +352,7 @@ case class WholeStageTransformerExec(child: SparkPlan)(val transformStageId: Int
             out.write(substraitPlan.toByteArray());
             out.flush();*/
 
-            logWarning(s"The substrait plan for partition ${index}:\n${substraitPlan.toString}")
+            //logWarning(s"The substrait plan for partition ${index}:\n${substraitPlan.toString}")
             NativeFilePartition(index, files, substraitPlan.toByteArray)
           }
           case _ => p
