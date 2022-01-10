@@ -255,7 +255,7 @@ object ChAsLibDemo {
     createTempView(spark, currentPath)
 
     import scala.io.Source
-    val queryId = "q%02d.sql".format(6)
+    val queryId = "q%02d.sql".format(23)
     val source = Source.fromFile(new File(queriesPath + queryId), "UTF-8")
     spark.sparkContext.setJobDescription(s"Query ${queryId}")
     spark.sql(source.mkString).show(10000, false)
