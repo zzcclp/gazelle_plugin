@@ -32,10 +32,10 @@ object BenchmarkTest {
     executedCnt, configed, sqlFilePath, stopFlagFile) = if (args.length > 0) {
       (args(0), args(1), args(2).toInt, true, args(3), args(4))
     } else {
-      (new File(this.getClass.getResource("/").getPath + "../../../../../tpch-data")
+      val rootPath = this.getClass.getResource("/").getPath
+      (new File(rootPath + "../../../../../tpch-data")
         .getAbsolutePath, "arrow", 10, false,
-       "/home/myubuntu/Works/IdeaProjects/intel-native-sql-engine/native-sql-engine/core/src/main" +
-         "/resources/queries/q06.sql",
+        rootPath + "queries/q06.sql",
       "/tmp/stopFlagFile")
     }
 
