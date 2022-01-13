@@ -50,12 +50,33 @@ object TPCHDemo {
     val spark = sessionBuilder.getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
 
-    testTPCH(spark)
+    // testTPCH(spark)
+    testReadiris(spark)
 
     System.out.println("waiting for finishing")
     Thread.sleep(1800000)
     spark.stop()
     System.out.println("finished")
+  }
+
+  def testReadiris(spark: SparkSession): Unit = {
+
+    val dataSourceMap = Map(
+      "iris" -> spark.read.parquet(
+        "/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/utils/local-engine/tests/data/iris.parquet"))
+
+    dataSourceMap.foreach {
+      case (key, value) => value.createOrReplaceTempView(key)
+    }
+    spark.sql(
+      """
+        | select count(1) from iris
+        |""".stripMargin).show(200, false)
+    spark.sql(
+      """
+        | select * from iris
+        | where sepal_length * 0.8 < 4.0 and type_string = '类型1'
+        |""".stripMargin).show(200, false)
   }
 
   def testTPCH(spark: SparkSession): Unit = {

@@ -33,7 +33,7 @@ class SubstraitContext() {
 
   def registerFunction(funcName: String): java.lang.Long = {
     if (!functionMap.containsKey(funcName)) {
-      val newFunctionId: java.lang.Long = functionMap.size + 1L
+      val newFunctionId: java.lang.Long = functionMap.size.toLong
       functionMap.put(funcName, newFunctionId)
       newFunctionId
     }

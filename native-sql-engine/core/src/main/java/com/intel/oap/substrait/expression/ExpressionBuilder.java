@@ -31,7 +31,7 @@ public class ExpressionBuilder {
 
     public static Long newScalarFunction(Map<String, Long> functionMap, String functionName) {
         if (!functionMap.containsKey(functionName)) {
-            Long functionId = functionMap.size() + 1L;
+            Long functionId = Long.valueOf(functionMap.size());
             functionMap.put(functionName, functionId);
             return functionId;
         } else {
