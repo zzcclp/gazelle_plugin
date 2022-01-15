@@ -103,11 +103,13 @@ class WholestageNativeRowRDD(
       }
 
       private def nextIterator(): Boolean = {
+        var startTime = System.nanoTime()
         if (resIter.hasNext) {
-          val startTime = System.nanoTime()
+          logWarning(s"===========${totalBatch} ${System.nanoTime() - startTime}")
+          startTime = System.nanoTime()
           val sparkRowInfo = resIter.next()
           totalBatch += 1
-          logWarning(s"===========3 ${System.nanoTime() - startTime}")
+          logWarning(s"===========${totalBatch} ${System.nanoTime() - startTime}")
           val result = if (sparkRowInfo.offsets != null && sparkRowInfo.offsets.length > 0) {
             val numRows = sparkRowInfo.offsets.length
             val numFields = sparkRowInfo.fieldsNum

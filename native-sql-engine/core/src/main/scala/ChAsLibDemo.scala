@@ -64,7 +64,7 @@ object ChAsLibDemo {
       //  "/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/cmake-build-debug/utils/local-engine/liblocal_engine_jnid.so")
       .config("spark.oap.sql.columnar.ch.so.filepath",
         "/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/cmake-build-release/utils/local-engine/liblocal_engine_jni.so")
-      .config("spark.sql.planChangeLog.level", "info")
+      //.config("spark.sql.planChangeLog.level", "info")
       .config("spark.sql.columnVector.offheap.enabled", "true")
       .config("spark.memory.offHeap.enabled", "true")
       .config("spark.memory.offHeap.size", "6442450944")
@@ -77,8 +77,8 @@ object ChAsLibDemo {
 
     // testTableScan(spark)
     // testTableScan1(spark)
-    testQ6(spark)
-    // testIntelQ6(spark)
+    // testQ6(spark)
+    testIntelQ6(spark)
 
     System.out.println("waiting for finishing")
     Thread.sleep(1800000)
@@ -179,9 +179,9 @@ object ChAsLibDemo {
 
   def testIntelQ6(spark: SparkSession): Unit = {
     val testDF = spark.read.format("arrow")
-      .load("/data1/test_output/intel-gazelle-test-8m-sorted.snappy.parquet")
+      .load("/data1/test_output/intel-gazelle-test.snappy.parquet")
     testDF.createOrReplaceTempView("gazelle_intel")
-    val cnt = 50
+    val cnt = 10
     val tookTimeArr = ArrayBuffer[Long]()
     for (i <- 1 to cnt) {
       val startTime = System.nanoTime()

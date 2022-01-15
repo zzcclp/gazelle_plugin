@@ -33,10 +33,11 @@ object BenchmarkTest {
       (args(0), args(1), args(2).toInt, true, args(3), args(4))
     } else {
       val rootPath = this.getClass.getResource("/").getPath
-      (new File(rootPath + "../../../../../tpch-data")
+      /* (new File(rootPath + "../../../../../tpch-data")
         .getAbsolutePath, "arrow", 10, false,
-        rootPath + "queries/q06.sql",
-      "/tmp/stopFlagFile")
+        rootPath + "queries/q06.sql", "") */
+      ("/data1/test_output/tpch-data-sf10", "parquet", 20, false,
+        rootPath + "queries/q06.sql", "")
     }
 
     val sqlStr = Source.fromFile(new File(sqlFilePath), "UTF-8")
@@ -72,15 +73,15 @@ object BenchmarkTest {
         .config("spark.memory.fraction", "0.3")
         .config("spark.memory.storageFraction", "0.3")
         .config("spark.sql.parquet.columnarReaderBatchSize", "20000")
-        .config("spark.plugins", "com.intel.oap.GazellePlugin")
-        .config("spark.sql.execution.arrow.maxRecordsPerBatch", "20000")
-        .config("spark.oap.sql.columnar.columnartorow", "false")
-        .config("spark.oap.sql.columnar.use.emptyiter", "false")
+        //.config("spark.plugins", "com.intel.oap.GazellePlugin")
+        //.config("spark.sql.execution.arrow.maxRecordsPerBatch", "20000")
+        //.config("spark.oap.sql.columnar.columnartorow", "false")
+        //.config("spark.oap.sql.columnar.use.emptyiter", "false")
         //.config("spark.oap.sql.columnar.ch.so.filepath",
         //  "/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/cmake-build-debug/utils/local-engine/liblocal_engine_jnid.so")
         .config("spark.oap.sql.columnar.ch.so.filepath",
           "/home/myubuntu/Works/c_cpp_projects/Kyligence-ClickHouse/cmake-build-release/utils/local-engine/liblocal_engine_jni.so")
-        .config("spark.sql.planChangeLog.level", "info")
+        //.config("spark.sql.planChangeLog.level", "info")
         .config("spark.sql.columnVector.offheap.enabled", "true")
         .config("spark.memory.offHeap.enabled", "true")
         .config("spark.memory.offHeap.size", "6442450944")
