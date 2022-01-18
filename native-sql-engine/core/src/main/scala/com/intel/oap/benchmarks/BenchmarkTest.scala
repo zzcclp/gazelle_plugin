@@ -36,7 +36,7 @@ object BenchmarkTest {
       /* (new File(rootPath + "../../../../../tpch-data")
         .getAbsolutePath, "arrow", 10, false,
         rootPath + "queries/q06.sql", "") */
-      ("/data1/test_output/tpch-data-sf10", "parquet", 20, false,
+      ("/data1/test_output/tpch-data-sf10-nonesnappy", "parquet", 30, false,
         rootPath + "queries/q06.sql", "")
     }
 
@@ -48,7 +48,7 @@ object BenchmarkTest {
 
     val sessionBuilder = if (!configed) {
       sessionBuilderTmp
-        .master("local[1]")
+        .master("local[3]")
         .config("spark.driver.memory", "4G")
         .config("spark.driver.memoryOverhead", "6G")
         //.config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
@@ -60,7 +60,7 @@ object BenchmarkTest {
         //.config("spark.sql.adaptive.coalescePartitions.enabled", "true")
         //.config("spark.sql.adaptive.coalescePartitions.minPartitionNum", "2")
         //.config("spark.sql.adaptive.advisoryPartitionSizeInBytes", "2MB")
-        .config("spark.sql.files.maxPartitionBytes", 1024 << 10 << 10) // default is 128M
+        .config("spark.sql.files.maxPartitionBytes", 1536 << 10 << 10) // default is 128M
         .config("spark.sql.files.minPartitionNum", "1")
         .config("spark.sql.parquet.filterPushdown", "true")
         .config("spark.locality.wait", "0s")
@@ -72,7 +72,7 @@ object BenchmarkTest {
         .config("spark.sql.sources.useV1SourceList", "avro")
         .config("spark.memory.fraction", "0.3")
         .config("spark.memory.storageFraction", "0.3")
-        .config("spark.sql.parquet.columnarReaderBatchSize", "20000")
+        //.config("spark.sql.parquet.columnarReaderBatchSize", "20000")
         //.config("spark.plugins", "com.intel.oap.GazellePlugin")
         //.config("spark.sql.execution.arrow.maxRecordsPerBatch", "20000")
         //.config("spark.oap.sql.columnar.columnartorow", "false")
@@ -119,8 +119,39 @@ object BenchmarkTest {
     val tookTimeArr = ArrayBuffer[Long]()
     for (i <- 1 to executedCnt) {
       val startTime = System.nanoTime()
-      spark.sql(sql).show(200, false)
+      //spark.sql(sql).show(200, false)
+      spark.sql(
+        """
+          | SELECT
+          |    sum(l_extendedprice * l_discount) AS revenue
+          | FROM
+          |    lineitem
+          | WHERE
+          |    l_shipdate >= date'1994-01-01'
+          |    AND l_shipdate < date'1994-01-01' + interval 1 year
+          |    AND l_discount BETWEEN 0.06 - 0.01 AND 0.06 + 0.01
+          |    AND l_quantity < 24;
+          |""".stripMargin).show(200, false)
+      /*spark.sql(
+        """
+          | SELECT
+          |    sum(l_extendedprice * l_discount) AS revenue
+          | FROM
+          |    lineitem
+          | WHERE
+          |    l_returnflag = 'A' AND l_linestatus = 'F'
+          |    AND l_shipdate >= date'1994-01-01'
+          |    AND l_shipdate < date'1994-01-01' + interval 1 year
+          |    AND l_discount BETWEEN 0.06 - 0.01 AND 0.06 + 0.01
+          |    AND l_quantity < 24;
+          |""".stripMargin).show(200, false)*/
+      /* spark.sql(
+        """
+          | SELECT sum(l_orderkey), sum(l_partkey), sum(l_suppkey), sum(l_linenumber), sum(l_quantity), sum(l_extendedprice), sum(l_discount), sum(l_tax)
+          | FROM lineitem;
+          |""".stripMargin).show(10, false) */
       val tookTime = (System.nanoTime() - startTime) / 1000000
+      println(s"Execute ${i} time, time: ${tookTime}")
       tookTimeArr += tookTime
     }
 

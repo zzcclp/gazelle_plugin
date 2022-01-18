@@ -113,8 +113,9 @@ object ImportCsvToParquet {
       configed, configFile) = if (args.length > 0) {
       (args(0), args(1), args(2).toInt, args(3).toBoolean, true, args(4))
     } else {
-      ("/data1/tpch-data-gen/tpch_2_16_0/sf10", "/data1/test_output/tpch-data-sf10",
-        2, false, false, this.getClass.getResource("/").getPath + "/import_csv_to_parquet.config")
+      ("/data1/tpch-data-gen/tpch_2_16_0/sf10",
+        "/data1/test_output/tpch-data-sf10-sorted",
+        2, true, false, this.getClass.getResource("/").getPath + "/import_csv_to_parquet.config")
     }
 
     var tableConfigs: Map[String, TableConfig] = Map()
@@ -145,7 +146,9 @@ object ImportCsvToParquet {
         .config("spark.sql.files.minPartitionNum", "1")
         .config("spark.sql.parquet.filterPushdown", "true")
         .config("spark.sql.parquet.enableVectorizedReader", "true")
+        // 536870912
         //.config("spark.hadoop.parquet.block.size", "8388608")
+        //.config("spark.sql.parquet.compression.codec", "none")
         .config("spark.memory.fraction", "0.3")
         .config("spark.memory.storageFraction", "0.3")
         .config("spark.sql.planChangeLog.level", "info")
