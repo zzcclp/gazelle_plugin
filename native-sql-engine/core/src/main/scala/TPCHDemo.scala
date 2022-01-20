@@ -24,7 +24,7 @@ object TPCHDemo {
   def main(args: Array[String]): Unit = {
     val sessionBuilder = SparkSession
       .builder()
-      .master("local[4]")
+      .master("local[1]")
       .appName("TPCH-Demo")
       .config("spark.driver.memory", "4G")
       .config("spark.driver.memoryOverhead", "6G")
@@ -50,8 +50,8 @@ object TPCHDemo {
     val spark = sessionBuilder.getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
 
-    // testTPCH(spark)
-    testReadiris(spark)
+    testTPCH(spark)
+    // testReadiris(spark)
 
     System.out.println("waiting for finishing")
     Thread.sleep(1800000)
